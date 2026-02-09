@@ -109,9 +109,11 @@ export default function App() {
       {!isMobile && (
         <Sider width={240} breakpoint="lg" collapsedWidth="0" className="app-sider">
           <div className="brand-wrap">
-            <Typography.Title level={4} style={{ margin: 0 }}>
+            <Typography.Text className="brand-chip">PORTFOLIO ATLAS</Typography.Text>
+            <Typography.Title level={4} className="brand-title">
               投资组合管理
             </Typography.Title>
+            <Typography.Text className="brand-subtitle">配置 · 交易 · 持仓 · 归因</Typography.Text>
           </div>
           <Menu
             mode="inline"
@@ -138,12 +140,16 @@ export default function App() {
                 className="mobile-menu-btn"
               />
             )}
-            <Typography.Title level={3} style={{ margin: 0 }}>
+            <Typography.Title level={3} className="page-title">
               {routeMeta.title}
             </Typography.Title>
-            <Typography.Text type="secondary">{routeMeta.subtitle}</Typography.Text>
+            <Typography.Text type="secondary" className="page-subtitle">
+              {routeMeta.subtitle}
+            </Typography.Text>
           </div>
-          <Tag color="default">更新时间 {nowText}</Tag>
+          <Tag color="default" className="header-meta-tag">
+            更新时间 {nowText}
+          </Tag>
         </Header>
         <Content className="app-content">
           <Routes>
@@ -165,6 +171,7 @@ export default function App() {
         open={isMobile && mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
         width={280}
+        className="app-drawer"
       >
         <Menu
           mode="inline"

@@ -859,7 +859,7 @@ export default function TransactionsPage() {
   const transferCount = new Set(txs.filter((item) => item.transfer_group_id).map((item) => item.transfer_group_id)).size;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack transactions-page">
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
       {successMessage && <Alert type="success" showIcon message={successMessage} closable />}
 

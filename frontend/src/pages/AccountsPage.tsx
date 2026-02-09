@@ -221,7 +221,7 @@ export default function AccountsPage() {
   const baseCurrency = summary?.base_currency ?? "CNY";
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack accounts-page">
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
       {message && <Alert type="success" showIcon message={message} closable />}
 

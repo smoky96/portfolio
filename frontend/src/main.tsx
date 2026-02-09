@@ -14,9 +14,43 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: "#1677ff",
-          borderRadius: 10,
-          fontFamily: "PingFang SC, Hiragino Sans GB, Microsoft YaHei, sans-serif"
+          colorPrimary: "#1456c7",
+          colorSuccess: "#1f9d78",
+          colorWarning: "#c77722",
+          colorError: "#c94a4a",
+          borderRadius: 12,
+          borderRadiusLG: 16,
+          fontFamily: "\"Noto Sans SC\", \"Source Han Sans SC\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+          fontSize: 14
+        },
+        components: {
+          Layout: {
+            headerBg: "#ffffffd9",
+            bodyBg: "#eff3f8"
+          },
+          Card: {
+            headerFontSize: 15,
+            headerHeight: 54,
+            bodyPadding: 18
+          },
+          Table: {
+            headerBg: "#f2f6fd",
+            rowHoverBg: "#f7faff"
+          },
+          Button: {
+            fontWeight: 600,
+            controlHeight: 36
+          },
+          Input: {
+            controlHeight: 38
+          },
+          Select: {
+            controlHeight: 38
+          },
+          Segmented: {
+            itemSelectedBg: "#ffffff",
+            itemHoverBg: "#edf2fb"
+          }
         }
       }}
     >

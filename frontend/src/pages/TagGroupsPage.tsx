@@ -243,7 +243,7 @@ export default function TagGroupsPage() {
   );
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack tags-page">
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
       {messageText && <Alert type="success" showIcon message={messageText} closable />}
 

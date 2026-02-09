@@ -704,7 +704,7 @@ export default function DashboardPage() {
 
   if (!summary) {
     return (
-      <Space direction="vertical" style={{ width: "100%" }}>
+      <Space direction="vertical" style={{ width: "100%" }} className="page-stack dashboard-page">
         {error && <Alert type="error" message="加载失败" description={error} showIcon />}
         <Card loading={loading} />
       </Space>
@@ -712,7 +712,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
+    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack dashboard-page">
       {error && <Alert type="error" message="请求失败" description={error} showIcon closable />}
 
       <div className="dashboard-kpi-grid page-section">
