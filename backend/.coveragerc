@@ -1,0 +1,14 @@
+[run]
+branch = True
+source = app
+omit =
+    app/tests/*
+    app/scripts/*
+
+[report]
+show_missing = True
+skip_covered = False
+precision = 2
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:

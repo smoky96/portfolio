@@ -1,0 +1,24 @@
+# OS
+.DS_Store
+
+# env
+.env
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+
+# node
+node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+
+# logs
+*.log
+
+# docker
+*.pid

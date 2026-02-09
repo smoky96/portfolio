@@ -1,0 +1,5 @@
+type,account_id,instrument_id,counterparty_account_id,quantity,price,amount,fee,tax,currency,executed_at,executed_tz,note
+CASH_IN,1,,,,,10000,0,0,CNY,2026-02-07T09:30:00+08:00,Asia/Shanghai,deposit
+BUY,2,1,,10,100,1000,1,0,CNY,2026-02-07T10:00:00+08:00,Asia/Shanghai,buy sample
+SELL,2,1,,2,120,240,1,0,CNY,2026-02-08T10:00:00+08:00,Asia/Shanghai,sell sample
+INTERNAL_TRANSFER,1,,2,,,500,0,0,CNY,2026-02-08T11:00:00+08:00,Asia/Shanghai,transfer sample
