@@ -230,6 +230,108 @@ test.describe("Allocation tag management @allocation", () => {
     }
   });
 
+  test("custom instrument without holdings can be added to node", async ({ page, request }, testInfo) => {
+    test.skip(testInfo.project.name.includes("mobile"), "desktop flow only");
+
+    const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]/g, "").toUpperCase()}_${Date.now().toString().slice(-6)}`;
+    const rootName = `自定义绑定根_${unique}`;
+    const targetNodeName = `自定义绑定节点_${unique}`;
+    const customSymbol = `CUST_${unique}`.slice(0, 28);
+    const customName = `自定义标的_${unique}`;
+
+    let rootNodeId: number | null = null;
+    let targetNodeId: number | null = null;
+    let customInstrumentId: number | null = null;
+
+    try {
+      const createRootResp = await request.post("/api/v1/allocation/nodes", {
+        data: {
+          parent_id: null,
+          name: rootName,
+          target_weight: 0
+        }
+      });
+      expect(createRootResp.ok()).toBeTruthy();
+      rootNodeId = ((await createRootResp.json()) as AllocationNodeFixture).id;
+
+      const createNodeResp = await request.post("/api/v1/allocation/nodes", {
+        data: {
+          parent_id: rootNodeId,
+          name: targetNodeName,
+          target_weight: 100
+        }
+      });
+      expect(createNodeResp.ok()).toBeTruthy();
+      targetNodeId = ((await createNodeResp.json()) as AllocationNodeFixture).id;
+
+      const createCustomResp = await request.post("/api/v1/instruments", {
+        data: {
+          symbol: customSymbol,
+          market: "CUSTOM",
+          type: "FUND",
+          currency: "CNY",
+          name: customName,
+          default_account_id: null,
+          allocation_node_id: null
+        }
+      });
+      expect(createCustomResp.ok()).toBeTruthy();
+      customInstrumentId = (await createCustomResp.json()).id as number;
+
+      await page.goto("/allocation");
+      await expect(page.getByText("资产层级配置")).toBeVisible();
+
+      const targetNode = page
+        .locator('.ant-tree-treenode[role="treeitem"]')
+        .filter({ hasText: targetNodeName })
+        .locator(".tree-node-title")
+        .first();
+      await safeClick(targetNode);
+
+      const editPanel = page
+        .locator(".ant-card")
+        .filter({ hasText: "资产层级配置" })
+        .first()
+        .locator(".allocation-panel")
+        .nth(1);
+      await expect(editPanel.getByText("持仓标的配置")).toBeVisible();
+
+      const select = editPanel.locator(".ant-select").first();
+      await safeClick(select.locator(".ant-select-selector"));
+      const searchInput = select.locator("input.ant-select-selection-search-input").first();
+      await searchInput.fill(customSymbol);
+      await page.keyboard.press("Enter");
+
+      await safeClick(editPanel.getByRole("button", { name: "添加标的", exact: true }));
+      await expect(page.getByText("持仓标的已添加到当前节点")).toBeVisible();
+
+      const boundRow = editPanel.locator(".ant-table-tbody tr").filter({ hasText: customSymbol }).first();
+      await expect(boundRow).toBeVisible();
+    } finally {
+      if (customInstrumentId !== null) {
+        try {
+          await request.patch(`/api/v1/instruments/${customInstrumentId}`, { data: { allocation_node_id: null } });
+        } catch {
+          // ignore cleanup failure when request context is already closing
+        }
+      }
+      if (targetNodeId !== null) {
+        try {
+          await request.delete(`/api/v1/allocation/nodes/${targetNodeId}`);
+        } catch {
+          // ignore cleanup failure when request context is already closing
+        }
+      }
+      if (rootNodeId !== null) {
+        try {
+          await request.delete(`/api/v1/allocation/nodes/${rootNodeId}`);
+        } catch {
+          // ignore cleanup failure when request context is already closing
+        }
+      }
+    }
+  });
+
   test("node can be deleted from UI with confirmation", async ({ page, request }, testInfo) => {
     const unique = `${testInfo.project.name.replace(/[^A-Za-z0-9]/g, "").toUpperCase()}_${Date.now().toString().slice(-6)}`;
     const rootName = `删除测试根_${unique}`;

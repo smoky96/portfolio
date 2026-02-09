@@ -56,6 +56,7 @@ interface BoundLeafHoldingInstrument {
   instrument_id: number;
   symbol: string;
   name: string;
+  market: string;
   market_value: number;
 }
 
@@ -253,33 +254,20 @@ export default function AllocationPage() {
 
   const selectedLeafInstrumentIds = useMemo(() => new Set(selectedLeafInstruments.map((item) => item.id)), [selectedLeafInstruments]);
   const selectableHoldingOptions = useMemo(() => {
-    return Array.from(holdingsByInstrument.entries())
-      .map(([instrumentId, snapshot]) => {
-        if (selectedLeafInstrumentIds.has(instrumentId)) {
-          return null;
-        }
-        const instrument = instrumentMap.get(instrumentId);
-        if (!instrument) {
-          return null;
-        }
-        return {
-          value: instrumentId,
-          label: `${instrument.symbol} · ${instrument.name}`,
-          market_value: snapshot.market_value
-        };
-      })
-      .filter((item): item is { value: number; label: string; market_value: number } => item !== null)
+    return instruments
+      .filter((item) => !selectedLeafInstrumentIds.has(item.id))
+      .map((item) => ({
+        value: item.id,
+        label: `${item.symbol} · ${item.name}`,
+        market_value: holdingsByInstrument.get(item.id)?.market_value ?? 0
+      }))
       .sort((a, b) => b.market_value - a.market_value || a.label.localeCompare(b.label, "zh-Hans-CN"));
-  }, [holdingsByInstrument, instrumentMap, selectedLeafInstrumentIds]);
+  }, [instruments, holdingsByInstrument, selectedLeafInstrumentIds]);
 
   const boundLeafHoldingInstruments = useMemo(() => {
     const map = new Map<number, BoundLeafHoldingInstrument[]>();
     instruments.forEach((item) => {
       if (item.allocation_node_id === null) {
-        return;
-      }
-      const snapshot = holdingsByInstrument.get(item.id);
-      if (!snapshot || snapshot.market_value <= 0.0001) {
         return;
       }
       if (!map.has(item.allocation_node_id)) {
@@ -289,7 +277,8 @@ export default function AllocationPage() {
         instrument_id: item.id,
         symbol: item.symbol,
         name: item.name,
-        market_value: snapshot.market_value
+        market: item.market,
+        market_value: holdingsByInstrument.get(item.id)?.market_value ?? 0
       });
     });
 
@@ -502,13 +491,11 @@ export default function AllocationPage() {
     function build(parentId: number | null): DataNode[] {
       const siblings = childrenMap.get(parentId) ?? [];
       return siblings.map((node) => {
-        const level = getNodeLevel(node);
         const hasNodeChildren = (childrenMap.get(node.id)?.length ?? 0) > 0;
         const title = (
           <div className="tree-node-title">
             <div className="tree-node-left">
               <Typography.Text>{node.name}</Typography.Text>
-              <Tag color={level === "ROOT" ? "gold" : level === "BRANCH" ? "blue" : "green"}>{NODE_LEVEL_LABELS[level]}</Tag>
             </div>
             <Typography.Text type="secondary">{formatPercent(nodeWeightDrafts[node.id] ?? Number(node.target_weight))}</Typography.Text>
           </div>
@@ -835,12 +822,12 @@ export default function AllocationPage() {
                       持仓标的配置
                     </Typography.Title>
                     <Typography.Text type="secondary">
-                      当前节点无子节点，可将已有持仓标的归入该节点，用于“当前层级资产结构”展示标的占比。
+                      当前节点无子节点，可将已有标的（含自定义标的）归入该节点，用于“当前层级资产结构”展示标的占比。
                     </Typography.Text>
                     <Space.Compact style={{ width: "100%" }}>
                       <Select
                         value={leafInstrumentDraftId}
-                        placeholder="选择持仓标的"
+                        placeholder="选择标的"
                         style={{ flex: 1 }}
                         showSearch
                         allowClear
