@@ -863,32 +863,32 @@ export default function TransactionsPage() {
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
       {successMessage && <Alert type="success" showIcon message={successMessage} closable />}
 
-      <div className="page-grid page-section">
-        <Card>
+      <div className="page-grid page-section transactions-kpi-grid">
+        <Card className="transactions-kpi-card">
           <Typography.Text type="secondary">流水总笔数</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8 }}>
             {formatDecimal(txs.length)}
           </Typography.Title>
         </Card>
-        <Card>
+        <Card className="transactions-kpi-card">
           <Typography.Text type="secondary">买入 / 卖出</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8 }}>
             {formatDecimal(txs.filter((item) => item.type === "BUY").length)} / {formatDecimal(txs.filter((item) => item.type === "SELL").length)}
           </Typography.Title>
         </Card>
-        <Card>
+        <Card className="transactions-kpi-card">
           <Typography.Text type="secondary">内部转账</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8 }}>
             {formatDecimal(transferCount)}
           </Typography.Title>
         </Card>
-        <Card>
+        <Card className="transactions-kpi-card">
           <Typography.Text type="secondary">现金净流入</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8, color: "#1f4f94" }}>
             {formatDecimal(netCashInflow)}
           </Typography.Title>
         </Card>
-        <Card>
+        <Card className="transactions-kpi-card">
           <Typography.Text type="secondary">现金净流出</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8, color: "#d9363e" }}>
             {formatDecimal(netCashOutflow)}
@@ -896,7 +896,7 @@ export default function TransactionsPage() {
         </Card>
       </div>
 
-      <Card className="page-section" title="手工录入流水">
+      <Card className="page-section transactions-form-card" title="手工录入流水">
         <Form<TransactionForm> layout="vertical" form={form} onFinish={(values) => void onCreate(values)}>
           <div className="page-grid">
             <Form.Item label="流水类型" name="type" rules={[{ required: true, message: "请选择流水类型" }]}>
@@ -1025,7 +1025,7 @@ export default function TransactionsPage() {
         </Form>
       </Card>
 
-      <Card className="page-section" title="CSV 批量导入" extra={<Button onClick={downloadCsvTemplate}>下载 CSV 模板</Button>}>
+      <Card className="page-section transactions-import-card" title="CSV 批量导入" extra={<Button onClick={downloadCsvTemplate}>下载 CSV 模板</Button>}>
         <Space>
           <Upload
             accept=".csv"
@@ -1047,8 +1047,8 @@ export default function TransactionsPage() {
         </Space>
       </Card>
 
-      <Card className="page-section" title="流水明细">
-        <div className="page-toolbar">
+      <Card className="page-section transactions-table-card" title="流水明细">
+        <div className="page-toolbar transactions-toolbar">
           <Input
             placeholder="按类型/账户/标的/币种/备注搜索"
             value={keyword}

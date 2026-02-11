@@ -8,7 +8,7 @@ import {
   TagOutlined,
   TagsOutlined
 } from "@ant-design/icons";
-import { Button, Drawer, Grid, Layout, Menu, Space, Tag, Typography } from "antd";
+import { Button, Drawer, Grid, Layout, Space, Tag, Typography } from "antd";
 import { ReactNode, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
@@ -104,6 +104,29 @@ export default function App() {
     hour12: false
   }).format(new Date());
 
+  function renderNav(onNavigate?: () => void) {
+    return (
+      <nav className="side-nav" aria-label="主导航">
+        {NAV_ITEMS.map((item) => {
+          const active = selectedKey === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              className={`side-nav-item${active ? " is-active" : ""}`}
+              onClick={() => {
+                navigate(item.key);
+                onNavigate?.();
+              }}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+    );
+  }
+
   return (
     <Layout className="app-layout">
       {!isMobile && (
@@ -115,13 +138,7 @@ export default function App() {
             </Typography.Title>
             <Typography.Text className="brand-subtitle">配置 · 交易 · 持仓 · 归因</Typography.Text>
           </div>
-          <Menu
-            mode="inline"
-            selectedKeys={[selectedKey]}
-            items={NAV_ITEMS}
-            onClick={({ key }) => navigate(key)}
-            className="app-menu"
-          />
+          {renderNav()}
           <div className="sider-foot">
             <Tag color="blue">记账本位币 CNY</Tag>
             <Tag color="geekblue">时区 Asia/Shanghai</Tag>
@@ -173,15 +190,7 @@ export default function App() {
         width={280}
         className="app-drawer"
       >
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          items={NAV_ITEMS}
-          onClick={({ key }) => {
-            navigate(key);
-            setMobileNavOpen(false);
-          }}
-        />
+        {renderNav(() => setMobileNavOpen(false))}
         <div className="drawer-foot">
           <Tag color="blue">记账本位币 CNY</Tag>
           <Tag color="geekblue">时区 Asia/Shanghai</Tag>

@@ -112,7 +112,7 @@ function buildExpectedRootPie(params: {
 }
 
 async function clickNav(page: Page, label: string) {
-  const desktopItem = page.locator(".app-sider .ant-menu-item").filter({ hasText: label }).first();
+  const desktopItem = page.locator(".app-sider .side-nav-item, .app-sider .ant-menu-item").filter({ hasText: label }).first();
   if (await desktopItem.count()) {
     await desktopItem.click();
     return;
@@ -121,11 +121,15 @@ async function clickNav(page: Page, label: string) {
   const mobileMenuBtn = page.getByLabel("打开导航菜单");
   if (await mobileMenuBtn.count()) {
     await mobileMenuBtn.click();
-    await page.locator(".ant-drawer .ant-menu-item").filter({ hasText: label }).first().click();
+    await page
+      .locator(".ant-drawer .side-nav-item, .ant-drawer .ant-menu-item")
+      .filter({ hasText: label })
+      .first()
+      .click();
     return;
   }
 
-  await page.locator(".ant-menu-item").filter({ hasText: label }).first().click();
+  await page.locator(".side-nav-item, .ant-menu-item").filter({ hasText: label }).first().click();
 }
 
 test.describe("Portfolio smoke @smoke", () => {

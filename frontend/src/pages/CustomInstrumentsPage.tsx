@@ -224,7 +224,7 @@ export default function CustomInstrumentsPage() {
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack custom-instruments-page">
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
 
-      <Card className="page-section" title="新增自定义标的">
+      <Card className="page-section custom-create-card" title="新增自定义标的">
         <Form<CustomInstrumentForm> layout="vertical" form={customForm} onFinish={(values) => void onCreateCustom(values)}>
           <div className="page-grid">
             <Form.Item label="标的代码" name="symbol" rules={[{ required: true, message: "请输入标的代码" }]}>
@@ -261,8 +261,8 @@ export default function CustomInstrumentsPage() {
         </Form>
       </Card>
 
-      <Card className="page-section" title="自定义标的一览">
-        <div className="page-toolbar">
+      <Card className="page-section custom-list-card" title="自定义标的一览">
+        <div className="page-toolbar custom-instruments-toolbar">
           <Input
             placeholder="按代码或名称搜索"
             value={customKeyword}

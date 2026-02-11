@@ -754,10 +754,11 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <Row gutter={[16, 16]} className="page-section">
-        <Col span={24}>
+      <Row gutter={[16, 16]} className="page-section dashboard-hero-row">
+        <Col xs={24} xl={16}>
           <Card
             title="收益率曲线"
+            className="dashboard-curve-card"
             extra={
               <Select
                 size="small"
@@ -782,97 +783,8 @@ export default function DashboardPage() {
             )}
           </Card>
         </Col>
-      </Row>
 
-      <Row gutter={[16, 16]} className="page-section dashboard-chart-row">
-        <Col xs={24} md={12} xl={6}>
-          <Card
-            title="资产结构"
-            className="dashboard-pie-card"
-            extra={
-              <Select
-                size="small"
-                style={{ width: 180 }}
-                value={activeAssetNodeId ?? "ROOT"}
-                options={assetNodeOptions}
-                onChange={(value) => setActiveAssetNodeId(value === "ROOT" ? null : Number(value))}
-              />
-            }
-          >
-            {rootChartOption ? (
-              <ReactECharts option={rootChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-pie" />
-            ) : (
-              <div className="chart-empty">暂无可展示数据</div>
-            )}
-            {activeAssetNodeId === null && (
-              <Checkbox checked={showRootCashInAssetPie} onChange={(event) => setShowRootCashInAssetPie(event.target.checked)}>
-                显示账户现金
-              </Checkbox>
-            )}
-            <Space direction="vertical" style={{ width: "100%" }} size={8}>
-              {assetStructure.slices.map((slice) => (
-                <div key={slice.label} className="donut-legend-item">
-                  <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
-                  <Typography.Text>{slice.label}</Typography.Text>
-                  <Typography.Text className="metric-value">{formatPercent(slice.value)}</Typography.Text>
-                </div>
-              ))}
-            </Space>
-          </Card>
-        </Col>
-
-        <Col xs={24} md={12} xl={6}>
-          <Card
-            title="标签持仓占比"
-            className="dashboard-pie-card"
-            extra={
-              <Select
-                size="small"
-                style={{ width: 160 }}
-                value={activeTagGroupId ?? undefined}
-                placeholder="选择标签组"
-                options={tagGroups.map((item) => ({ value: item.id, label: item.name }))}
-                onChange={(value: number) => setActiveTagGroupId(value)}
-                disabled={tagGroups.length === 0}
-              />
-            }
-          >
-            {tagGroups.length === 0 ? (
-              <div className="chart-empty">请先在标签组页面创建标签组</div>
-            ) : tagGroupChartOption ? (
-              <ReactECharts option={tagGroupChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-pie" />
-            ) : (
-              <div className="chart-empty">{showUntaggedInTagPie ? "当前标签组暂无可展示持仓" : "当前标签组暂无已标记持仓"}</div>
-            )}
-            <Checkbox checked={showUntaggedInTagPie} onChange={(event) => setShowUntaggedInTagPie(event.target.checked)} disabled={tagGroups.length === 0}>
-              显示未标记资产
-            </Checkbox>
-            <Space direction="vertical" style={{ width: "100%" }} size={8}>
-              {derived.activeTagGroupName && (
-                <Typography.Text type="secondary">当前标签组：{derived.activeTagGroupName}</Typography.Text>
-              )}
-              {derived.tagGroupSlices.map((slice) => (
-                <div key={slice.label} className="donut-legend-item">
-                  <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
-                  <Typography.Text>{slice.label}</Typography.Text>
-                  <Typography.Text className="metric-value">{formatPercent(slice.value)}</Typography.Text>
-                </div>
-              ))}
-            </Space>
-          </Card>
-        </Col>
-
-        <Col xs={24} md={12} xl={6}>
-          <Card title="偏离强度" className="dashboard-drift-card">
-            {driftChartOption ? (
-              <ReactECharts option={driftChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-drift" />
-            ) : (
-              <Typography.Text type="secondary">暂无偏离数据</Typography.Text>
-            )}
-          </Card>
-        </Col>
-
-        <Col xs={24} md={12} xl={6}>
+        <Col xs={24} xl={8}>
           <Card title="收益快照" className="dashboard-snapshot-card">
             <Space direction="vertical" style={{ width: "100%" }} size={10}>
               <div className="snapshot-row">
@@ -918,6 +830,95 @@ export default function DashboardPage() {
                 </Space>
               </div>
             </Space>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]} className="page-section dashboard-chart-row">
+        <Col xs={24} md={12} xl={8}>
+          <Card
+            title="资产结构"
+            className="dashboard-pie-card dashboard-asset-card"
+            extra={
+              <Select
+                size="small"
+                style={{ width: 180 }}
+                value={activeAssetNodeId ?? "ROOT"}
+                options={assetNodeOptions}
+                onChange={(value) => setActiveAssetNodeId(value === "ROOT" ? null : Number(value))}
+              />
+            }
+          >
+            {rootChartOption ? (
+              <ReactECharts option={rootChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-pie" />
+            ) : (
+              <div className="chart-empty">暂无可展示数据</div>
+            )}
+            {activeAssetNodeId === null && (
+              <Checkbox checked={showRootCashInAssetPie} onChange={(event) => setShowRootCashInAssetPie(event.target.checked)}>
+                显示账户现金
+              </Checkbox>
+            )}
+            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+              {assetStructure.slices.map((slice) => (
+                <div key={slice.label} className="donut-legend-item">
+                  <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
+                  <Typography.Text>{slice.label}</Typography.Text>
+                  <Typography.Text className="metric-value">{formatPercent(slice.value)}</Typography.Text>
+                </div>
+              ))}
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} md={12} xl={8}>
+          <Card
+            title="标签持仓占比"
+            className="dashboard-pie-card dashboard-tag-card"
+            extra={
+              <Select
+                size="small"
+                style={{ width: 160 }}
+                value={activeTagGroupId ?? undefined}
+                placeholder="选择标签组"
+                options={tagGroups.map((item) => ({ value: item.id, label: item.name }))}
+                onChange={(value: number) => setActiveTagGroupId(value)}
+                disabled={tagGroups.length === 0}
+              />
+            }
+          >
+            {tagGroups.length === 0 ? (
+              <div className="chart-empty">请先在标签组页面创建标签组</div>
+            ) : tagGroupChartOption ? (
+              <ReactECharts option={tagGroupChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-pie" />
+            ) : (
+              <div className="chart-empty">{showUntaggedInTagPie ? "当前标签组暂无可展示持仓" : "当前标签组暂无已标记持仓"}</div>
+            )}
+            <Checkbox checked={showUntaggedInTagPie} onChange={(event) => setShowUntaggedInTagPie(event.target.checked)} disabled={tagGroups.length === 0}>
+              显示未标记资产
+            </Checkbox>
+            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+              {derived.activeTagGroupName && (
+                <Typography.Text type="secondary">当前标签组：{derived.activeTagGroupName}</Typography.Text>
+              )}
+              {derived.tagGroupSlices.map((slice) => (
+                <div key={slice.label} className="donut-legend-item">
+                  <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
+                  <Typography.Text>{slice.label}</Typography.Text>
+                  <Typography.Text className="metric-value">{formatPercent(slice.value)}</Typography.Text>
+                </div>
+              ))}
+            </Space>
+          </Card>
+        </Col>
+
+        <Col xs={24} md={24} xl={8}>
+          <Card title="偏离强度" className="dashboard-drift-card">
+            {driftChartOption ? (
+              <ReactECharts option={driftChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-drift" />
+            ) : (
+              <Typography.Text type="secondary">暂无偏离数据</Typography.Text>
+            )}
           </Card>
         </Col>
       </Row>

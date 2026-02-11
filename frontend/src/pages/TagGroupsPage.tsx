@@ -247,10 +247,10 @@ export default function TagGroupsPage() {
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
       {messageText && <Alert type="success" showIcon message={messageText} closable />}
 
-      <Card className="page-section" title="标签组配置" extra={<Button onClick={() => void load()}>刷新</Button>} loading={loading}>
+      <Card className="page-section tags-config-card" title="标签组配置" extra={<Button onClick={() => void load()}>刷新</Button>} loading={loading}>
         <Row gutter={[16, 16]}>
           <Col xs={24} xl={8}>
-            <Card size="small" title="新增标签组">
+            <Card size="small" title="新增标签组" className="tags-inner-card">
               <Form<TagGroupForm> layout="vertical" form={tagGroupForm} onFinish={(values) => void createTagGroup(values)}>
                 <Form.Item label="标签组名称" name="name" rules={[{ required: true, message: "请输入标签组名称" }]}>
                   <Input placeholder="例如：行业 / 风格 / 区域" />
@@ -263,7 +263,7 @@ export default function TagGroupsPage() {
           </Col>
 
           <Col xs={24} xl={16}>
-            <Card size="small" title="标签组列表">
+            <Card size="small" title="标签组列表" className="tags-inner-card">
               <Table
                 rowKey="id"
                 size="small"
@@ -294,7 +294,7 @@ export default function TagGroupsPage() {
           </Col>
 
           <Col xs={24}>
-            <Card size="small" title="标签管理">
+            <Card size="small" title="标签管理" className="tags-inner-card">
               <Form<TagForm> layout="vertical" form={tagForm} onFinish={(values) => void createTag(values)}>
                 <Row gutter={[12, 12]} align="bottom">
                   <Col xs={24} md={8}>
@@ -350,6 +350,7 @@ export default function TagGroupsPage() {
             <Card
               size="small"
               title="标的标签分配"
+              className="tags-inner-card tags-assignment-card"
               extra={
                 <Space>
                   <Button onClick={resetPendingTagSelections} disabled={pendingSelectionCount === 0 || savingTagAssignments}>

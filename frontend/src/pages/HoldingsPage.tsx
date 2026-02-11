@@ -278,26 +278,26 @@ export default function HoldingsPage() {
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack holdings-page">
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
 
-      <div className="page-grid page-section">
-        <Card>
+      <div className="page-grid page-section holdings-kpi-grid">
+        <Card className="holdings-kpi-card">
           <Typography.Text type="secondary">组合市值</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8 }}>
             {formatDecimal(totalMarketValue)}
           </Typography.Title>
         </Card>
-        <Card>
+        <Card className="holdings-kpi-card">
           <Typography.Text type="secondary">组合成本</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8 }}>
             {formatDecimal(totalCostValue)}
           </Typography.Title>
         </Card>
-        <Card>
+        <Card className="holdings-kpi-card">
           <Typography.Text type="secondary">浮盈亏</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8, color: totalPnl >= 0 ? "#1677ff" : "#ff4d4f" }}>
             {formatDecimal(totalPnl)}
           </Typography.Title>
         </Card>
-        <Card>
+        <Card className="holdings-kpi-card">
           <Typography.Text type="secondary">偏离提醒</Typography.Text>
           <Typography.Title level={3} style={{ marginTop: 8 }}>
             {formatDecimal(driftAlertCount)}
@@ -305,7 +305,7 @@ export default function HoldingsPage() {
         </Card>
       </div>
 
-      <Card className="page-section" title="核心敞口" extra={<Tag color="blue">按市值 Top 4</Tag>}>
+      <Card className="page-section holdings-exposure-card" title="核心敞口" extra={<Tag color="blue">按市值 Top 4</Tag>}>
         <Row gutter={[12, 12]}>
           {topExposures.length === 0 && (
             <Col span={24}>
@@ -336,7 +336,7 @@ export default function HoldingsPage() {
       </Card>
 
       <Card
-        className="page-section"
+        className="page-section holdings-detail-card"
         title="持仓明细"
         extra={
           <Button onClick={() => void load()} loading={loading}>
@@ -400,7 +400,7 @@ export default function HoldingsPage() {
       </Card>
 
       <Card
-        className="page-section"
+        className="page-section holdings-drift-card"
         title="权重偏离"
         extra={
           <Tag color={filteredDrifts.filter((item) => item.is_alerted).length > 0 ? "warning" : "success"}>

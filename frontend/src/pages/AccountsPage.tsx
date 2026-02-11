@@ -226,7 +226,7 @@ export default function AccountsPage() {
       {message && <Alert type="success" showIcon message={message} closable />}
 
       <Card
-        className="page-section"
+        className="page-section accounts-curve-card"
         title={`账户总资产曲线（${baseCurrency}）`}
         extra={
           <Typography.Text type="secondary">
@@ -243,7 +243,7 @@ export default function AccountsPage() {
         )}
       </Card>
 
-      <Card className="page-section" title="新增账户">
+      <Card className="page-section accounts-create-card" title="新增账户">
         <Form<AccountForm> layout="vertical" form={form} onFinish={(values) => void onCreate(values)}>
           <div className="page-grid">
             <Form.Item label="账户名称" name="name" rules={[{ required: true, message: "请输入账户名称" }]}>
@@ -272,8 +272,8 @@ export default function AccountsPage() {
         </Form>
       </Card>
 
-      <Card className="page-section" title="账户列表">
-        <div className="page-toolbar">
+      <Card className="page-section accounts-table-card" title="账户列表">
+        <div className="page-toolbar accounts-toolbar">
           <Input
             placeholder="按账户名称搜索"
             value={keyword}

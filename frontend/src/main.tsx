@@ -14,42 +14,52 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: "#1456c7",
-          colorSuccess: "#1f9d78",
-          colorWarning: "#c77722",
-          colorError: "#c94a4a",
-          borderRadius: 12,
-          borderRadiusLG: 16,
-          fontFamily: "\"Noto Sans SC\", \"Source Han Sans SC\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
+          colorPrimary: "#1f4f94",
+          colorSuccess: "#15936f",
+          colorWarning: "#c17620",
+          colorError: "#d44545",
+          borderRadius: 10,
+          borderRadiusLG: 18,
+          fontFamily: "\"Manrope\", \"Noto Sans SC\", \"PingFang SC\", \"Hiragino Sans GB\", \"Microsoft YaHei\", sans-serif",
           fontSize: 14
         },
         components: {
           Layout: {
             headerBg: "#ffffffd9",
-            bodyBg: "#eff3f8"
+            bodyBg: "#f1f4f9"
           },
           Card: {
             headerFontSize: 15,
             headerHeight: 54,
-            bodyPadding: 18
+            bodyPadding: 18,
+            colorBorderSecondary: "#d4e0ef"
           },
           Table: {
             headerBg: "#f2f6fd",
-            rowHoverBg: "#f7faff"
+            rowHoverBg: "#f7fbff",
+            borderColor: "#d8e3f2"
           },
           Button: {
             fontWeight: 600,
-            controlHeight: 36
+            controlHeight: 38
           },
           Input: {
-            controlHeight: 38
+            controlHeight: 40
           },
           Select: {
-            controlHeight: 38
+            controlHeight: 40
           },
           Segmented: {
             itemSelectedBg: "#ffffff",
             itemHoverBg: "#edf2fb"
+          },
+          Checkbox: {
+            colorPrimary: "#1f4f94",
+            colorPrimaryHover: "#2a5ca8"
+          },
+          Progress: {
+            defaultColor: "#1f4f94",
+            remainingColor: "#e7eef9"
           }
         }
       }}

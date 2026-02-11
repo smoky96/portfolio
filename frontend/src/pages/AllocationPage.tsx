@@ -3,7 +3,6 @@ import {
   Button,
   Card,
   Col,
-  Divider,
   Form,
   Input,
   InputNumber,
@@ -681,7 +680,7 @@ export default function AllocationPage() {
       {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
       {messageText && <Alert type="success" showIcon message={messageText} closable />}
 
-      <Row gutter={[16, 16]} className="page-section dashboard-chart-row">
+      <Row gutter={[16, 16]} className="page-section dashboard-chart-row allocation-chart-row">
         <Col xs={24} md={12} xl={8}>
           <Card title="目标资产结构（根节点）" className="dashboard-pie-card">
             {rootChartOption ? (
@@ -744,7 +743,7 @@ export default function AllocationPage() {
         </Col>
       </Row>
 
-      <Card title="资产层级配置" extra={<Button onClick={() => void load()}>刷新</Button>} className="allocation-main-card page-section" loading={loading}>
+      <Card title="资产层级配置" extra={<Button onClick={() => void load()}>刷新</Button>} className="allocation-main-card page-section allocation-workbench-card" loading={loading}>
         <Alert
           type={isHundred(rootWeight) ? "success" : "warning"}
           message={isHundred(rootWeight) ? "顶层权重合计为 100%" : `顶层权重合计为 ${rootWeight.toFixed(3)}%，请校准`}
@@ -780,7 +779,7 @@ export default function AllocationPage() {
             </div>
           </div>
 
-          <div className="allocation-panel">
+          <div className="allocation-panel allocation-editor-panel">
             <div className="allocation-panel-head">
               <Typography.Title level={5} style={{ margin: 0 }}>
                 节点编辑
@@ -795,29 +794,44 @@ export default function AllocationPage() {
             {!selectedNode && <Alert type="info" showIcon message="请先在左侧树中选择一个节点，再进行编辑。" />}
 
             {selectedNode && (
-              <Space direction="vertical" size={12} style={{ width: "100%" }}>
-                <Typography.Text className="allocation-node-path">
-                  当前节点：<Tag color="blue">{buildNodePath(selectedNode, nodeMap)}</Tag>
-                </Typography.Text>
+              <div className="allocation-editor-stack">
+                <div className="allocation-editor-group allocation-editor-overview">
+                  <Typography.Text className="allocation-node-path">
+                    当前节点：<Tag color="blue">{buildNodePath(selectedNode, nodeMap)}</Tag>
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
+                    在这里可以修改节点名称、删除节点、校准同层权重，以及为无子节点的层级挂载标的。
+                  </Typography.Text>
+                </div>
 
-                <Form<NodeRenameForm> layout="vertical" form={nodeRenameForm} onFinish={(values) => void renameSelectedNode(values)}>
-                  <Form.Item label="节点名称" name="name" rules={[{ required: true, message: "请输入节点名称" }]}>
-                    <Input placeholder="输入新节点名称" />
-                  </Form.Item>
-                  <Space wrap>
-                    <Button type="primary" htmlType="submit">
-                      保存名称
-                    </Button>
-                    <Button danger onClick={confirmDeleteSelectedNode}>
-                      删除当前节点
-                    </Button>
-                  </Space>
-                </Form>
-
-                <Divider style={{ margin: "4px 0" }} />
+                <div className="allocation-editor-group">
+                  <Typography.Title level={5} style={{ margin: 0 }}>
+                    节点基础信息
+                  </Typography.Title>
+                  <Form<NodeRenameForm> layout="vertical" form={nodeRenameForm} onFinish={(values) => void renameSelectedNode(values)} className="allocation-rename-form">
+                    <div className="allocation-rename-grid">
+                      <Form.Item
+                        className="allocation-rename-field"
+                        label="节点名称"
+                        name="name"
+                        rules={[{ required: true, message: "请输入节点名称" }]}
+                      >
+                        <Input placeholder="输入新节点名称" />
+                      </Form.Item>
+                      <div className="allocation-rename-actions">
+                        <Button type="primary" htmlType="submit">
+                          保存名称
+                        </Button>
+                        <Button danger onClick={confirmDeleteSelectedNode}>
+                          删除当前节点
+                        </Button>
+                      </div>
+                    </div>
+                  </Form>
+                </div>
 
                 {selectedNodeCanBindInstruments && (
-                  <>
+                  <div className="allocation-editor-group">
                     <Typography.Title level={5} style={{ margin: 0 }}>
                       持仓标的配置
                     </Typography.Title>
@@ -848,6 +862,7 @@ export default function AllocationPage() {
                       rowKey="instrument_id"
                       pagination={false}
                       size="small"
+                      scroll={{ x: 580 }}
                       dataSource={selectedLeafInstrumentRows}
                       locale={{ emptyText: "当前节点暂无标的" }}
                       columns={[
@@ -882,97 +897,103 @@ export default function AllocationPage() {
                         }
                       ]}
                     />
-                    <Divider style={{ margin: "4px 0" }} />
-                  </>
+                  </div>
                 )}
 
-                <Typography.Text strong>
-                  同层权重校准：<Tag color="blue">{activeParentLabel}</Tag>
-                </Typography.Text>
-                <Typography.Text type="secondary">
-                  保存时会一次性更新当前父节点下所有子节点权重，当前合计：
-                  <Tag color={isHundred(activeSiblingTotal) ? "success" : "warning"}>{formatPercent(activeSiblingTotal)}</Tag>
-                </Typography.Text>
-                <Table
-                  rowKey="id"
-                  pagination={false}
-                  size="small"
-                  scroll={{ x: 520 }}
-                  dataSource={activeSiblingNodes}
-                  locale={{ emptyText: "当前层暂无节点" }}
-                  columns={[
-                    { title: "节点名称", dataIndex: "name" },
-                    {
-                      title: "层级标签",
-                      key: "level",
-                      render: (_: unknown, record: AllocationNode) => {
-                        const level = getNodeLevel(record);
-                        const color = level === "ROOT" ? "gold" : level === "BRANCH" ? "blue" : "green";
-                        return <Tag color={color}>{NODE_LEVEL_LABELS[level]}</Tag>;
+                <div className="allocation-editor-group">
+                  <div className="allocation-editor-title-row">
+                    <Typography.Text strong>
+                      同层权重校准：<Tag color="blue">{activeParentLabel}</Tag>
+                    </Typography.Text>
+                    <Tag color={isHundred(activeSiblingTotal) ? "success" : "warning"}>{formatPercent(activeSiblingTotal)}</Tag>
+                  </div>
+                  <Typography.Text type="secondary">
+                    保存时会一次性更新当前父节点下所有子节点权重，建议先把目标比例全部调整完再统一提交。
+                  </Typography.Text>
+                  <Table
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 520 }}
+                    dataSource={activeSiblingNodes}
+                    locale={{ emptyText: "当前层暂无节点" }}
+                    columns={[
+                      { title: "节点名称", dataIndex: "name" },
+                      {
+                        title: "层级标签",
+                        key: "level",
+                        render: (_: unknown, record: AllocationNode) => {
+                          const level = getNodeLevel(record);
+                          const color = level === "ROOT" ? "gold" : level === "BRANCH" ? "blue" : "green";
+                          return <Tag color={color}>{NODE_LEVEL_LABELS[level]}</Tag>;
+                        }
+                      },
+                      {
+                        title: "目标权重",
+                        key: "target_weight",
+                        render: (_: unknown, record: AllocationNode) => (
+                          <Space>
+                            <InputNumber
+                              className="inline-weight"
+                              min={0}
+                              max={100}
+                              precision={3}
+                              value={nodeWeightDrafts[record.id] ?? Number(record.target_weight)}
+                              onChange={(value) =>
+                                setNodeWeightDrafts((prev) => ({
+                                  ...prev,
+                                  [record.id]: value === null ? Number(record.target_weight) : value
+                                }))
+                              }
+                            />
+                            <Typography.Text type="secondary">%</Typography.Text>
+                          </Space>
+                        )
                       }
-                    },
-                    {
-                      title: "目标权重",
-                      key: "target_weight",
-                      render: (_: unknown, record: AllocationNode) => (
-                        <Space>
-                          <InputNumber
-                            className="inline-weight"
-                            min={0}
-                            max={100}
-                            precision={3}
-                            value={nodeWeightDrafts[record.id] ?? Number(record.target_weight)}
-                            onChange={(value) =>
-                              setNodeWeightDrafts((prev) => ({
-                                ...prev,
-                                [record.id]: value === null ? Number(record.target_weight) : value
-                              }))
-                            }
-                          />
-                          <Typography.Text type="secondary">%</Typography.Text>
-                        </Space>
-                      )
-                    }
-                  ]}
-                />
-                <Button type="primary" onClick={() => void saveNodeSiblingWeights(activeParentId)} disabled={activeSiblingNodes.length === 0}>
-                  保存当前父节点下的全部子节点权重
-                </Button>
-              </Space>
+                    ]}
+                  />
+                  <Button type="primary" onClick={() => void saveNodeSiblingWeights(activeParentId)} disabled={activeSiblingNodes.length === 0}>
+                    保存当前父节点下的全部子节点权重
+                  </Button>
+                </div>
+              </div>
             )}
 
-            <Divider style={{ margin: "12px 0" }} />
-
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              新增节点
-            </Typography.Title>
-            <Form<NodeForm>
-              layout="vertical"
-              form={nodeForm}
-              onFinish={(values) => void createNode(values)}
-              onValuesChange={(changedValues, allValues) => {
-                if (!Object.prototype.hasOwnProperty.call(changedValues, "create_mode")) {
-                  return;
-                }
-                const mode = (allValues.create_mode as NodeForm["create_mode"]) ?? "ROOT";
-                const parentId = resolveCreateParentId(mode, selectedNode);
-                const siblings = getSiblingNodes(parentId);
-                nodeForm.setFieldValue("target_weight", siblings.length === 0 ? 100 : 0);
-              }}
-            >
-              <Form.Item label="插入位置" name="create_mode" rules={[{ required: true, message: "请选择插入位置" }]}>
-                <Radio.Group className="allocation-create-mode" options={createModeOptions} optionType="button" />
-              </Form.Item>
-              <Form.Item label="节点名称" name="name" rules={[{ required: true, message: "请输入节点名称" }]}>
-                <Input placeholder="例如：权益类" />
-              </Form.Item>
-              <Form.Item label="目标权重（%）" name="target_weight" rules={[{ required: true, message: "请输入目标权重" }]}>
-                <InputNumber min={0} max={100} precision={3} style={{ width: "100%" }} />
-              </Form.Item>
-              <Button type="primary" htmlType="submit" loading={loading}>
-                创建节点
-              </Button>
-            </Form>
+            <div className="allocation-editor-group allocation-editor-group-create">
+              <Typography.Title level={5} style={{ margin: 0 }}>
+                新增节点
+              </Typography.Title>
+              <Typography.Text type="secondary">
+                选择插入位置后，系统会自动根据同层节点数量给出默认权重（首个节点默认 100%）。
+              </Typography.Text>
+              <Form<NodeForm>
+                layout="vertical"
+                form={nodeForm}
+                onFinish={(values) => void createNode(values)}
+                onValuesChange={(changedValues, allValues) => {
+                  if (!Object.prototype.hasOwnProperty.call(changedValues, "create_mode")) {
+                    return;
+                  }
+                  const mode = (allValues.create_mode as NodeForm["create_mode"]) ?? "ROOT";
+                  const parentId = resolveCreateParentId(mode, selectedNode);
+                  const siblings = getSiblingNodes(parentId);
+                  nodeForm.setFieldValue("target_weight", siblings.length === 0 ? 100 : 0);
+                }}
+              >
+                <Form.Item label="插入位置" name="create_mode" rules={[{ required: true, message: "请选择插入位置" }]}>
+                  <Radio.Group className="allocation-create-mode" options={createModeOptions} optionType="button" />
+                </Form.Item>
+                <Form.Item label="节点名称" name="name" rules={[{ required: true, message: "请输入节点名称" }]}>
+                  <Input placeholder="例如：权益类" />
+                </Form.Item>
+                <Form.Item label="目标权重（%）" name="target_weight" rules={[{ required: true, message: "请输入目标权重" }]}>
+                  <InputNumber min={0} max={100} precision={3} style={{ width: "100%" }} />
+                </Form.Item>
+                <Button type="primary" htmlType="submit" loading={loading}>
+                  创建节点
+                </Button>
+              </Form>
+            </div>
           </div>
         </div>
       </Card>
