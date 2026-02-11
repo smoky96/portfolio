@@ -22,3 +22,6 @@ frontend/test-results/
 
 # docker
 *.pid
+
+# local codex workspace
+.codex/
