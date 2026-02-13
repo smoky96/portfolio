@@ -838,7 +838,7 @@ export default function AllocationPage() {
                     <Typography.Text type="secondary">
                       当前节点无子节点，可将已有标的（含自定义标的）归入该节点，用于“当前层级资产结构”展示标的占比。
                     </Typography.Text>
-                    <Space.Compact style={{ width: "100%" }}>
+                    <Space.Compact className="allocation-instrument-bind" style={{ width: "100%" }}>
                       <Select
                         value={leafInstrumentDraftId}
                         placeholder="选择标的"

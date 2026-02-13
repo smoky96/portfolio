@@ -20,16 +20,21 @@ def _validate_sum_to_hundred(weights: list[Decimal], scope: str) -> None:
         raise HTTPException(status_code=400, detail=f"{scope} target weights must sum to 100, got {total}")
 
 
-def validate_node_sibling_weights(db: Session, parent_id: int | None) -> None:
-    stmt = select(AllocationNode.target_weight).where(AllocationNode.parent_id == parent_id)
+def validate_node_sibling_weights(db: Session, parent_id: int | None, owner_id: int) -> None:
+    stmt = select(AllocationNode.target_weight).where(
+        AllocationNode.owner_id == owner_id,
+        AllocationNode.parent_id == parent_id,
+    )
     weights = [Decimal(w) for w in db.scalars(stmt)]
     if not weights:
         return
     _validate_sum_to_hundred(weights, "Allocation node siblings")
 
 
-def ensure_leaf_node(db: Session, node_id: int) -> None:
-    has_child = db.scalar(select(AllocationNode.id).where(AllocationNode.parent_id == node_id).limit(1))
+def ensure_leaf_node(db: Session, node_id: int, owner_id: int) -> None:
+    has_child = db.scalar(
+        select(AllocationNode.id).where(AllocationNode.owner_id == owner_id, AllocationNode.parent_id == node_id).limit(1)
+    )
     if has_child is not None:
         raise HTTPException(status_code=400, detail="Instruments can only be attached to nodes without children")
 
@@ -74,17 +79,21 @@ def compute_drift_items(
     base_currency: str,
     total_assets: Decimal,
     threshold: Decimal,
+    owner_id: int,
 ) -> list[dict]:
-    node_list = list(db.scalars(select(AllocationNode)))
+    node_list = list(db.scalars(select(AllocationNode).where(AllocationNode.owner_id == owner_id)))
     node_by_id = {n.id: n for n in node_list}
     parent_ids = {node.parent_id for node in node_list if node.parent_id is not None}
     leaf_nodes = [node for node in node_list if node.id not in parent_ids]
 
-    holdings = list_holdings(db, base_currency)
+    holdings = list_holdings(db, base_currency, owner_id)
     instrument_ids = [h["instrument_id"] for h in holdings]
     node_by_instrument: dict[int, int | None] = {}
     if instrument_ids:
-        inst_stmt = select(Instrument.id, Instrument.allocation_node_id).where(Instrument.id.in_(instrument_ids))
+        inst_stmt = select(Instrument.id, Instrument.allocation_node_id).where(
+            Instrument.owner_id == owner_id,
+            Instrument.id.in_(instrument_ids),
+        )
         for inst_id, node_id in db.execute(inst_stmt).all():
             node_by_instrument[inst_id] = node_id
 

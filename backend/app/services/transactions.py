@@ -33,17 +33,17 @@ REVERSAL_TYPE_MAP: dict[TransactionType, TransactionType] = {
 }
 
 
-def _ensure_account(db: Session, account_id: int) -> Account:
-    account = db.get(Account, account_id)
+def _ensure_account(db: Session, account_id: int, owner_id: int) -> Account:
+    account = db.scalar(select(Account).where(Account.id == account_id, Account.owner_id == owner_id))
     if not account:
         raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
     return account
 
 
-def _ensure_instrument(db: Session, instrument_id: int | None) -> Instrument | None:
+def _ensure_instrument(db: Session, instrument_id: int | None, owner_id: int) -> Instrument | None:
     if instrument_id is None:
         return None
-    instrument = db.get(Instrument, instrument_id)
+    instrument = db.scalar(select(Instrument).where(Instrument.id == instrument_id, Instrument.owner_id == owner_id))
     if not instrument:
         raise HTTPException(status_code=404, detail=f"Instrument {instrument_id} not found")
     return instrument
@@ -83,9 +83,9 @@ def _tx_to_audit_state(tx: Transaction) -> dict:
     }
 
 
-def _rebuild_snapshots(db: Session, pairs: set[tuple[int, int]]) -> None:
+def _rebuild_snapshots(db: Session, owner_id: int, pairs: set[tuple[int, int]]) -> None:
     for account_id, instrument_id in pairs:
-        rebuild_position_snapshot(db, account_id, instrument_id)
+        rebuild_position_snapshot(db, owner_id, account_id, instrument_id)
 
 
 def _position_pair_if_needed(account_id: int, instrument_id: int | None, tx_type: TransactionType) -> set[tuple[int, int]]:
@@ -94,8 +94,8 @@ def _position_pair_if_needed(account_id: int, instrument_id: int | None, tx_type
     return set()
 
 
-def _get_transaction_or_404(db: Session, transaction_id: int) -> Transaction:
-    tx = db.get(Transaction, transaction_id)
+def _get_transaction_or_404(db: Session, transaction_id: int, owner_id: int) -> Transaction:
+    tx = db.scalar(select(Transaction).where(Transaction.id == transaction_id, Transaction.owner_id == owner_id))
     if tx is None:
         raise HTTPException(status_code=404, detail=f"Transaction {transaction_id} not found")
     return tx
@@ -143,10 +143,11 @@ def update_transaction(
     db: Session,
     transaction_id: int,
     payload: TransactionUpdate,
+    owner_id: int,
     *,
     autocommit: bool = True,
 ) -> Transaction:
-    tx = _get_transaction_or_404(db, transaction_id)
+    tx = _get_transaction_or_404(db, transaction_id, owner_id)
     if tx.transfer_group_id:
         raise HTTPException(status_code=400, detail="internal transfer records cannot be edited directly")
 
@@ -157,18 +158,19 @@ def update_transaction(
     before_pairs = _position_pair_if_needed(tx.account_id, tx.instrument_id, tx.type)
 
     merged_payload = _build_create_payload_from_update(tx, payload)
-    _ensure_account(db, merged_payload.account_id)
-    _ensure_instrument(db, merged_payload.instrument_id)
+    _ensure_account(db, merged_payload.account_id, owner_id)
+    _ensure_instrument(db, merged_payload.instrument_id, owner_id)
     _validate_transaction_payload(merged_payload)
 
     _apply_transaction_payload(tx, merged_payload)
     db.flush()
 
     after_pairs = _position_pair_if_needed(tx.account_id, tx.instrument_id, tx.type)
-    _rebuild_snapshots(db, before_pairs | after_pairs)
+    _rebuild_snapshots(db, owner_id, before_pairs | after_pairs)
 
     write_audit_log(
         db,
+        owner_id=owner_id,
         entity="transaction",
         entity_id=str(tx.id),
         action="UPDATE",
@@ -182,15 +184,15 @@ def update_transaction(
     return tx
 
 
-def delete_transaction(db: Session, transaction_id: int, *, autocommit: bool = True) -> dict:
-    tx = _get_transaction_or_404(db, transaction_id)
+def delete_transaction(db: Session, transaction_id: int, owner_id: int, *, autocommit: bool = True) -> dict:
+    tx = _get_transaction_or_404(db, transaction_id, owner_id)
 
     if tx.transfer_group_id:
         transfer_group_id = tx.transfer_group_id
         transfer_rows = list(
             db.scalars(
                 select(Transaction)
-                .where(Transaction.transfer_group_id == transfer_group_id)
+                .where(Transaction.owner_id == owner_id, Transaction.transfer_group_id == transfer_group_id)
                 .order_by(Transaction.id)
             )
         )
@@ -204,6 +206,7 @@ def delete_transaction(db: Session, transaction_id: int, *, autocommit: bool = T
 
         write_audit_log(
             db,
+            owner_id=owner_id,
             entity="transaction",
             entity_id=str(transaction_id),
             action="DELETE_INTERNAL_TRANSFER",
@@ -220,10 +223,11 @@ def delete_transaction(db: Session, transaction_id: int, *, autocommit: bool = T
 
     db.delete(tx)
     db.flush()
-    _rebuild_snapshots(db, rebuild_pairs)
+    _rebuild_snapshots(db, owner_id, rebuild_pairs)
 
     write_audit_log(
         db,
+        owner_id=owner_id,
         entity="transaction",
         entity_id=str(transaction_id),
         action="DELETE",
@@ -236,8 +240,8 @@ def delete_transaction(db: Session, transaction_id: int, *, autocommit: bool = T
     return {"deleted": True, "deleted_count": 1}
 
 
-def reverse_transaction(db: Session, transaction_id: int, *, autocommit: bool = True) -> Transaction:
-    tx = _get_transaction_or_404(db, transaction_id)
+def reverse_transaction(db: Session, transaction_id: int, owner_id: int, *, autocommit: bool = True) -> Transaction:
+    tx = _get_transaction_or_404(db, transaction_id, owner_id)
 
     if tx.transfer_group_id:
         raise HTTPException(status_code=400, detail="internal transfer records cannot be reversed directly")
@@ -269,10 +273,11 @@ def reverse_transaction(db: Session, transaction_id: int, *, autocommit: bool = 
         executed_tz=tx.executed_tz,
         note=f"冲销原流水#{tx.id}",
     )
-    reversed_tx = create_transaction(db, payload, autocommit=False)
+    reversed_tx = create_transaction(db, payload, owner_id=owner_id, autocommit=False)
 
     write_audit_log(
         db,
+        owner_id=owner_id,
         entity="transaction",
         entity_id=str(tx.id),
         action="REVERSE",
@@ -289,18 +294,19 @@ def reverse_transaction(db: Session, transaction_id: int, *, autocommit: bool = 
     return reversed_tx
 
 
-def create_transaction(db: Session, payload: TransactionCreate, *, autocommit: bool = True) -> Transaction:
+def create_transaction(db: Session, payload: TransactionCreate, owner_id: int, *, autocommit: bool = True) -> Transaction:
     _validate_transaction_payload(payload)
-    _ensure_account(db, payload.account_id)
-    _ensure_instrument(db, payload.instrument_id)
+    _ensure_account(db, payload.account_id, owner_id)
+    _ensure_instrument(db, payload.instrument_id, owner_id)
 
     transfer_group_id: str | None = None
 
     if payload.type == TransactionType.INTERNAL_TRANSFER:
-        _ensure_account(db, payload.counterparty_account_id)
+        _ensure_account(db, payload.counterparty_account_id, owner_id)
         transfer_group_id = str(uuid.uuid4())
 
         out_tx = Transaction(
+            owner_id=owner_id,
             type=TransactionType.CASH_OUT,
             account_id=payload.account_id,
             instrument_id=None,
@@ -316,6 +322,7 @@ def create_transaction(db: Session, payload: TransactionCreate, *, autocommit: b
             note=payload.note,
         )
         in_tx = Transaction(
+            owner_id=owner_id,
             type=TransactionType.CASH_IN,
             account_id=payload.counterparty_account_id,
             instrument_id=None,
@@ -336,6 +343,7 @@ def create_transaction(db: Session, payload: TransactionCreate, *, autocommit: b
 
         write_audit_log(
             db,
+            owner_id=owner_id,
             entity="transaction",
             entity_id=str(out_tx.id),
             action="CREATE_INTERNAL_TRANSFER",
@@ -355,6 +363,7 @@ def create_transaction(db: Session, payload: TransactionCreate, *, autocommit: b
         return out_tx
 
     tx = Transaction(
+        owner_id=owner_id,
         type=payload.type,
         account_id=payload.account_id,
         instrument_id=payload.instrument_id,
@@ -373,10 +382,11 @@ def create_transaction(db: Session, payload: TransactionCreate, *, autocommit: b
     db.flush()
 
     if payload.instrument_id is not None and payload.type in POSITION_AFFECTING_TYPES:
-        rebuild_position_snapshot(db, payload.account_id, payload.instrument_id)
+        rebuild_position_snapshot(db, owner_id, payload.account_id, payload.instrument_id)
 
     write_audit_log(
         db,
+        owner_id=owner_id,
         entity="transaction",
         entity_id=str(tx.id),
         action="CREATE",
@@ -411,6 +421,7 @@ def _parse_int(value: str | None) -> int | None:
 def import_transactions_from_csv(
     db: Session,
     csv_content: str,
+    owner_id: int,
     *,
     rollback_on_error: bool,
 ) -> dict:
@@ -439,7 +450,7 @@ def import_transactions_from_csv(
             )
 
             with db.begin_nested():
-                create_transaction(db, payload, autocommit=False)
+                create_transaction(db, payload, owner_id=owner_id, autocommit=False)
             success += 1
         except Exception as exc:  # noqa: BLE001
             errors.append({"line": idx, "error": str(exc)})
@@ -478,9 +489,21 @@ def _cash_delta(tx: Transaction) -> Decimal:
     return Decimal("0")
 
 
-def calculate_account_cash_balances(db: Session, base_currency: str) -> list[dict]:
-    accounts = list(db.scalars(select(Account).where(Account.is_active.is_(True)).order_by(Account.id)))
-    txs = list(db.scalars(select(Transaction).order_by(Transaction.executed_at, Transaction.id)))
+def calculate_account_cash_balances(db: Session, base_currency: str, owner_id: int) -> list[dict]:
+    accounts = list(
+        db.scalars(
+            select(Account)
+            .where(Account.owner_id == owner_id, Account.is_active.is_(True))
+            .order_by(Account.id)
+        )
+    )
+    txs = list(
+        db.scalars(
+            select(Transaction)
+            .where(Transaction.owner_id == owner_id)
+            .order_by(Transaction.executed_at, Transaction.id)
+        )
+    )
 
     txs_by_account: dict[int, list[Transaction]] = {}
     for tx in txs:

@@ -49,8 +49,14 @@ def _cash_delta(tx: Transaction) -> Decimal:
     return Decimal("0")
 
 
-def build_returns_curve(db: Session, *, base_currency: str, days: int = 180) -> list[dict]:
-    txs = list(db.scalars(select(Transaction).order_by(Transaction.executed_at, Transaction.id)))
+def build_returns_curve(db: Session, *, base_currency: str, days: int = 180, owner_id: int) -> list[dict]:
+    txs = list(
+        db.scalars(
+            select(Transaction)
+            .where(Transaction.owner_id == owner_id)
+            .order_by(Transaction.executed_at, Transaction.id)
+        )
+    )
     if not txs:
         return []
 
@@ -62,6 +68,7 @@ def build_returns_curve(db: Session, *, base_currency: str, days: int = 180) -> 
                 select(Quote)
                 .where(
                     Quote.instrument_id.in_(instrument_ids),
+                    Quote.owner_id == owner_id,
                     Quote.provider_status.in_([QuoteProviderStatus.SUCCESS, QuoteProviderStatus.MANUAL_OVERRIDE]),
                 )
                 .order_by(Quote.instrument_id, Quote.quoted_at)
@@ -149,11 +156,11 @@ def build_returns_curve(db: Session, *, base_currency: str, days: int = 180) -> 
     return points
 
 
-def build_dashboard_summary(db: Session, *, base_currency: str, drift_threshold: Decimal) -> dict:
-    holdings = list_holdings(db, base_currency)
+def build_dashboard_summary(db: Session, *, base_currency: str, drift_threshold: Decimal, owner_id: int) -> dict:
+    holdings = list_holdings(db, base_currency, owner_id)
     total_market_value = sum((Decimal(h["market_value"]) for h in holdings), start=Decimal("0"))
 
-    account_balances = calculate_account_cash_balances(db, base_currency)
+    account_balances = calculate_account_cash_balances(db, base_currency, owner_id)
     total_cash = sum((Decimal(a["base_cash_balance"]) for a in account_balances), start=Decimal("0"))
 
     total_assets = total_market_value + total_cash
@@ -162,6 +169,7 @@ def build_dashboard_summary(db: Session, *, base_currency: str, drift_threshold:
         base_currency=base_currency,
         total_assets=total_assets,
         threshold=drift_threshold,
+        owner_id=owner_id,
     )
     drift_alerts = [item for item in drift_items if item["is_alerted"]]
 

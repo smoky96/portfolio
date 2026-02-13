@@ -1,5 +1,7 @@
 import { expect, test, type Locator } from "@playwright/test";
 
+import { authedDelete, authedGet, authedPatch, authedPost, gotoWithLogin } from "./helpers/auth";
+
 function formItem(container: Locator, label: string): Locator {
   return container.locator(`.ant-form-item:has(label:has-text("${label}"))`).first();
 }
@@ -45,7 +47,7 @@ test.describe("Allocation tag management @allocation", () => {
     let groupId: number | null = null;
     let createdTagId: number | null = null;
     try {
-      const createGroupResp = await request.post("/api/v1/allocation/tag-groups", {
+      const createGroupResp = await authedPost(request, "/api/v1/allocation/tag-groups", {
         data: {
           name: groupName,
           order_index: 9999
@@ -54,7 +56,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createGroupResp.ok()).toBeTruthy();
       groupId = (await createGroupResp.json()).id as number;
 
-      await page.goto("/tags");
+      await gotoWithLogin(page, "/tags");
       await expect(page.getByText("标签组配置")).toBeVisible();
 
       const tagManageCard = page
@@ -73,7 +75,7 @@ test.describe("Allocation tag management @allocation", () => {
       await expect
         .poll(
           async () => {
-            const queryTagsResp = await request.get("/api/v1/allocation/tags");
+            const queryTagsResp = await authedGet(request, "/api/v1/allocation/tags");
             if (!queryTagsResp.ok()) {
               return null;
             }
@@ -84,16 +86,16 @@ test.describe("Allocation tag management @allocation", () => {
         )
         .not.toBeNull();
 
-      const queryTagsResp = await request.get("/api/v1/allocation/tags");
+      const queryTagsResp = await authedGet(request, "/api/v1/allocation/tags");
       expect(queryTagsResp.ok()).toBeTruthy();
       const queriedTags = (await queryTagsResp.json()) as Array<{ id: number; group_id: number; name: string }>;
       createdTagId = queriedTags.find((item) => item.name === tagName)?.id ?? null;
     } finally {
       if (createdTagId !== null) {
-        await request.delete(`/api/v1/allocation/tags/${createdTagId}`);
+        await authedDelete(request, `/api/v1/allocation/tags/${createdTagId}`);
       }
       if (groupId !== null) {
-        await request.delete(`/api/v1/allocation/tag-groups/${groupId}`);
+        await authedDelete(request, `/api/v1/allocation/tag-groups/${groupId}`);
       }
     }
   });
@@ -105,7 +107,7 @@ test.describe("Allocation tag management @allocation", () => {
 
     let groupId: number | null = null;
     try {
-      const createGroupResp = await request.post("/api/v1/allocation/tag-groups", {
+      const createGroupResp = await authedPost(request, "/api/v1/allocation/tag-groups", {
         data: {
           name: groupName,
           order_index: -9999
@@ -114,7 +116,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createGroupResp.ok()).toBeTruthy();
       groupId = (await createGroupResp.json()).id as number;
 
-      const createTagResp = await request.post("/api/v1/allocation/tags", {
+      const createTagResp = await authedPost(request, "/api/v1/allocation/tags", {
         data: {
           group_id: groupId,
           name: tagName,
@@ -124,13 +126,13 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createTagResp.ok()).toBeTruthy();
       const createdTagId = (await createTagResp.json()).id as number;
 
-      const instrumentsResp = await request.get("/api/v1/instruments");
+      const instrumentsResp = await authedGet(request, "/api/v1/instruments");
       expect(instrumentsResp.ok()).toBeTruthy();
       const instruments = (await instrumentsResp.json()) as InstrumentFixture[];
       expect(instruments.length).toBeGreaterThan(0);
       const targetInstrument = [...instruments].sort((a, b) => a.symbol.localeCompare(b.symbol, "en-US", { sensitivity: "base" }) || a.id - b.id)[0];
 
-      await page.goto("/tags");
+      await gotoWithLogin(page, "/tags");
       await expect(page.getByText("标签组配置")).toBeVisible();
 
       const allocationCard = page.locator(".ant-card").filter({ hasText: "标的标签分配" }).first();
@@ -148,7 +150,7 @@ test.describe("Allocation tag management @allocation", () => {
       const dropdown = page.locator(".ant-select-dropdown:visible").last();
       await safeClick(dropdown.locator(".ant-select-item-option").filter({ hasText: tagName }).first());
 
-      const beforeSaveResp = await request.get("/api/v1/allocation/instrument-tags");
+      const beforeSaveResp = await authedGet(request, "/api/v1/allocation/instrument-tags");
       expect(beforeSaveResp.ok()).toBeTruthy();
       const beforeSaveSelections = (await beforeSaveResp.json()) as InstrumentTagSelectionFixture[];
       expect(beforeSaveSelections.some((item) => item.instrument_id === targetInstrument.id && item.group_id === groupId)).toBeFalsy();
@@ -157,7 +159,7 @@ test.describe("Allocation tag management @allocation", () => {
       await safeClick(saveButton);
       await expect(page.getByText("标签分配已保存")).toBeVisible();
 
-      const afterSaveResp = await request.get("/api/v1/allocation/instrument-tags");
+      const afterSaveResp = await authedGet(request, "/api/v1/allocation/instrument-tags");
       expect(afterSaveResp.ok()).toBeTruthy();
       const afterSaveSelections = (await afterSaveResp.json()) as InstrumentTagSelectionFixture[];
       const selection = afterSaveSelections.find((item) => item.instrument_id === targetInstrument.id && item.group_id === groupId);
@@ -165,16 +167,16 @@ test.describe("Allocation tag management @allocation", () => {
       expect(selection?.tag_id).toBe(createdTagId);
     } finally {
       if (groupId !== null) {
-        await request.delete(`/api/v1/allocation/tag-groups/${groupId}`);
+        await authedDelete(request, `/api/v1/allocation/tag-groups/${groupId}`);
       }
     }
   });
 
   test("node without children can bind holding instrument and show share in current-level pie", async ({ page, request }) => {
     const [nodesResp, instrumentsResp, holdingsResp] = await Promise.all([
-      request.get("/api/v1/allocation/nodes"),
-      request.get("/api/v1/instruments"),
-      request.get("/api/v1/holdings")
+      authedGet(request, "/api/v1/allocation/nodes"),
+      authedGet(request, "/api/v1/instruments"),
+      authedGet(request, "/api/v1/holdings")
     ]);
     expect(nodesResp.ok()).toBeTruthy();
     expect(instrumentsResp.ok()).toBeTruthy();
@@ -215,12 +217,12 @@ test.describe("Allocation tag management @allocation", () => {
 
     const originalAllocationNodeId = targetInstrument.allocation_node_id;
     try {
-      const bindResp = await request.patch(`/api/v1/instruments/${targetInstrument.id}`, {
+      const bindResp = await authedPatch(request, `/api/v1/instruments/${targetInstrument.id}`, {
         data: { allocation_node_id: targetLeaf.id }
       });
       expect(bindResp.ok()).toBeTruthy();
 
-      await page.goto("/allocation");
+      await gotoWithLogin(page, "/allocation");
       await expect(page.getByText("资产层级配置")).toBeVisible();
 
       const targetTreeNode = page
@@ -248,7 +250,7 @@ test.describe("Allocation tag management @allocation", () => {
         .locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' ant-card ')][1]");
       await expect(currentChartCard.locator(".donut-legend-item").filter({ hasText: targetInstrument.symbol }).first()).toBeVisible();
     } finally {
-      const rollbackResp = await request.patch(`/api/v1/instruments/${targetInstrument.id}`, {
+      const rollbackResp = await authedPatch(request, `/api/v1/instruments/${targetInstrument.id}`, {
         data: { allocation_node_id: originalAllocationNodeId }
       });
       expect(rollbackResp.ok()).toBeTruthy();
@@ -269,7 +271,7 @@ test.describe("Allocation tag management @allocation", () => {
     let customInstrumentId: number | null = null;
 
     try {
-      const createRootResp = await request.post("/api/v1/allocation/nodes", {
+      const createRootResp = await authedPost(request, "/api/v1/allocation/nodes", {
         data: {
           parent_id: null,
           name: rootName,
@@ -279,7 +281,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createRootResp.ok()).toBeTruthy();
       rootNodeId = ((await createRootResp.json()) as AllocationNodeFixture).id;
 
-      const createNodeResp = await request.post("/api/v1/allocation/nodes", {
+      const createNodeResp = await authedPost(request, "/api/v1/allocation/nodes", {
         data: {
           parent_id: rootNodeId,
           name: targetNodeName,
@@ -289,7 +291,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createNodeResp.ok()).toBeTruthy();
       targetNodeId = ((await createNodeResp.json()) as AllocationNodeFixture).id;
 
-      const createCustomResp = await request.post("/api/v1/instruments", {
+      const createCustomResp = await authedPost(request, "/api/v1/instruments", {
         data: {
           symbol: customSymbol,
           market: "CUSTOM",
@@ -303,7 +305,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createCustomResp.ok()).toBeTruthy();
       customInstrumentId = (await createCustomResp.json()).id as number;
 
-      await page.goto("/allocation");
+      await gotoWithLogin(page, "/allocation");
       await expect(page.getByText("资产层级配置")).toBeVisible();
 
       const targetNode = page
@@ -335,21 +337,21 @@ test.describe("Allocation tag management @allocation", () => {
     } finally {
       if (customInstrumentId !== null) {
         try {
-          await request.patch(`/api/v1/instruments/${customInstrumentId}`, { data: { allocation_node_id: null } });
+          await authedPatch(request, `/api/v1/instruments/${customInstrumentId}`, { data: { allocation_node_id: null } });
         } catch {
           // ignore cleanup failure when request context is already closing
         }
       }
       if (targetNodeId !== null) {
         try {
-          await request.delete(`/api/v1/allocation/nodes/${targetNodeId}`);
+          await authedDelete(request, `/api/v1/allocation/nodes/${targetNodeId}`);
         } catch {
           // ignore cleanup failure when request context is already closing
         }
       }
       if (rootNodeId !== null) {
         try {
-          await request.delete(`/api/v1/allocation/nodes/${rootNodeId}`);
+          await authedDelete(request, `/api/v1/allocation/nodes/${rootNodeId}`);
         } catch {
           // ignore cleanup failure when request context is already closing
         }
@@ -365,7 +367,7 @@ test.describe("Allocation tag management @allocation", () => {
     let rootNodeId: number | null = null;
     let leafNodeId: number | null = null;
     try {
-      const createRootResp = await request.post("/api/v1/allocation/nodes", {
+      const createRootResp = await authedPost(request, "/api/v1/allocation/nodes", {
         data: {
           parent_id: null,
           name: rootName,
@@ -375,7 +377,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createRootResp.ok()).toBeTruthy();
       rootNodeId = ((await createRootResp.json()) as AllocationNodeFixture).id;
 
-      const createLeafResp = await request.post("/api/v1/allocation/nodes", {
+      const createLeafResp = await authedPost(request, "/api/v1/allocation/nodes", {
         data: {
           parent_id: rootNodeId,
           name: leafName,
@@ -385,7 +387,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createLeafResp.ok()).toBeTruthy();
       leafNodeId = ((await createLeafResp.json()) as AllocationNodeFixture).id;
 
-      await page.goto("/allocation");
+      await gotoWithLogin(page, "/allocation");
       await expect(page.getByText("资产层级配置")).toBeVisible();
 
       const targetLeafNode = page.locator(".tree-node-title").filter({ hasText: leafName }).first();
@@ -404,7 +406,7 @@ test.describe("Allocation tag management @allocation", () => {
       await expect
         .poll(
           async () => {
-            const leafQueryResp = await request.get("/api/v1/allocation/nodes");
+            const leafQueryResp = await authedGet(request, "/api/v1/allocation/nodes");
             if (!leafQueryResp.ok()) {
               return true;
             }
@@ -417,10 +419,10 @@ test.describe("Allocation tag management @allocation", () => {
       leafNodeId = null;
     } finally {
       if (leafNodeId !== null) {
-        await request.delete(`/api/v1/allocation/nodes/${leafNodeId}`);
+        await authedDelete(request, `/api/v1/allocation/nodes/${leafNodeId}`);
       }
       if (rootNodeId !== null) {
-        await request.delete(`/api/v1/allocation/nodes/${rootNodeId}`);
+        await authedDelete(request, `/api/v1/allocation/nodes/${rootNodeId}`);
       }
     }
   });
@@ -433,7 +435,7 @@ test.describe("Allocation tag management @allocation", () => {
     let rootNodeId: number | null = null;
     let childNodeId: number | null = null;
     try {
-      const createRootResp = await request.post("/api/v1/allocation/nodes", {
+      const createRootResp = await authedPost(request, "/api/v1/allocation/nodes", {
         data: {
           parent_id: null,
           name: rootName,
@@ -443,7 +445,7 @@ test.describe("Allocation tag management @allocation", () => {
       expect(createRootResp.ok()).toBeTruthy();
       rootNodeId = ((await createRootResp.json()) as AllocationNodeFixture).id;
 
-      const createChildResp = await request.post("/api/v1/allocation/nodes", {
+      const createChildResp = await authedPost(request, "/api/v1/allocation/nodes", {
         data: {
           parent_id: rootNodeId,
           name: childName,
@@ -454,10 +456,10 @@ test.describe("Allocation tag management @allocation", () => {
       childNodeId = ((await createChildResp.json()) as AllocationNodeFixture).id;
     } finally {
       if (childNodeId !== null) {
-        await request.delete(`/api/v1/allocation/nodes/${childNodeId}`);
+        await authedDelete(request, `/api/v1/allocation/nodes/${childNodeId}`);
       }
       if (rootNodeId !== null) {
-        await request.delete(`/api/v1/allocation/nodes/${rootNodeId}`);
+        await authedDelete(request, `/api/v1/allocation/nodes/${rootNodeId}`);
       }
     }
   });

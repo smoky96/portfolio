@@ -19,6 +19,7 @@ from app.models import (
     Transaction,
     TransactionType,
 )
+from app.services.auth import ensure_bootstrap_admin, ensure_bootstrap_invite_code
 from app.schemas import TransactionCreate
 from app.services.quotes import create_manual_override
 from app.services.transactions import create_transaction
@@ -37,6 +38,8 @@ def reset_database(db) -> None:
                 instruments,
                 allocation_nodes,
                 accounts,
+                invite_codes,
+                users,
                 fx_rates
             RESTART IDENTITY CASCADE
             """
@@ -45,26 +48,26 @@ def reset_database(db) -> None:
     db.commit()
 
 
-def seed_accounts(db) -> dict[str, Account]:
+def seed_accounts(db, owner_id: int) -> dict[str, Account]:
     accounts = [
-        Account(name="现金管理账户", type=AccountType.CASH, base_currency="CNY", is_active=True),
-        Account(name="A股券商账户", type=AccountType.BROKERAGE, base_currency="CNY", is_active=True),
-        Account(name="美股券商账户", type=AccountType.BROKERAGE, base_currency="USD", is_active=True),
+        Account(owner_id=owner_id, name="现金管理账户", type=AccountType.CASH, base_currency="CNY", is_active=True),
+        Account(owner_id=owner_id, name="A股券商账户", type=AccountType.BROKERAGE, base_currency="CNY", is_active=True),
+        Account(owner_id=owner_id, name="美股券商账户", type=AccountType.BROKERAGE, base_currency="USD", is_active=True),
     ]
     db.add_all(accounts)
     db.flush()
     return {item.name: item for item in accounts}
 
 
-def seed_allocation(db) -> dict[str, AllocationNode]:
-    root_equity = AllocationNode(parent_id=None, name="权益", target_weight=Decimal("70"), order_index=1)
-    root_bond = AllocationNode(parent_id=None, name="固收", target_weight=Decimal("20"), order_index=2)
-    root_cash = AllocationNode(parent_id=None, name="现金", target_weight=Decimal("10"), order_index=3)
+def seed_allocation(db, owner_id: int) -> dict[str, AllocationNode]:
+    root_equity = AllocationNode(owner_id=owner_id, parent_id=None, name="权益", target_weight=Decimal("70"), order_index=1)
+    root_bond = AllocationNode(owner_id=owner_id, parent_id=None, name="固收", target_weight=Decimal("20"), order_index=2)
+    root_cash = AllocationNode(owner_id=owner_id, parent_id=None, name="现金", target_weight=Decimal("10"), order_index=3)
     db.add_all([root_equity, root_bond, root_cash])
     db.flush()
 
-    cn_equity = AllocationNode(parent_id=root_equity.id, name="中国权益", target_weight=Decimal("60"), order_index=1)
-    us_equity = AllocationNode(parent_id=root_equity.id, name="海外权益", target_weight=Decimal("40"), order_index=2)
+    cn_equity = AllocationNode(owner_id=owner_id, parent_id=root_equity.id, name="中国权益", target_weight=Decimal("60"), order_index=1)
+    us_equity = AllocationNode(owner_id=owner_id, parent_id=root_equity.id, name="海外权益", target_weight=Decimal("40"), order_index=2)
     db.add_all([cn_equity, us_equity])
     db.flush()
 
@@ -76,9 +79,10 @@ def seed_allocation(db) -> dict[str, AllocationNode]:
     }
 
 
-def seed_instruments(db, accounts: dict[str, Account], allocation_nodes: dict[str, AllocationNode]) -> dict[str, Instrument]:
+def seed_instruments(db, owner_id: int, accounts: dict[str, Account], allocation_nodes: dict[str, AllocationNode]) -> dict[str, Instrument]:
     instruments = [
         Instrument(
+            owner_id=owner_id,
             symbol="600519.SS",
             market="CN",
             type=InstrumentType.STOCK,
@@ -88,6 +92,7 @@ def seed_instruments(db, accounts: dict[str, Account], allocation_nodes: dict[st
             allocation_node_id=allocation_nodes["中国股票"].id,
         ),
         Instrument(
+            owner_id=owner_id,
             symbol="511010.SS",
             market="CN",
             type=InstrumentType.FUND,
@@ -97,6 +102,7 @@ def seed_instruments(db, accounts: dict[str, Account], allocation_nodes: dict[st
             allocation_node_id=allocation_nodes["债券基金"].id,
         ),
         Instrument(
+            owner_id=owner_id,
             symbol="AAPL",
             market="US",
             type=InstrumentType.STOCK,
@@ -106,6 +112,7 @@ def seed_instruments(db, accounts: dict[str, Account], allocation_nodes: dict[st
             allocation_node_id=allocation_nodes["海外股票"].id,
         ),
         Instrument(
+            owner_id=owner_id,
             symbol="BND",
             market="US",
             type=InstrumentType.FUND,
@@ -128,7 +135,7 @@ def seed_fx_rates(db, now: datetime) -> None:
     db.add_all(rates)
 
 
-def seed_transactions(db, accounts: dict[str, Account], instruments: dict[str, Instrument], base_time: datetime) -> None:
+def seed_transactions(db, owner_id: int, accounts: dict[str, Account], instruments: dict[str, Instrument], base_time: datetime) -> None:
     payloads = [
         TransactionCreate(
             type=TransactionType.CASH_IN,
@@ -272,13 +279,14 @@ def seed_transactions(db, accounts: dict[str, Account], instruments: dict[str, I
     ]
 
     for payload in payloads:
-        create_transaction(db, payload, autocommit=False)
+        create_transaction(db, payload, owner_id=owner_id, autocommit=False)
     db.commit()
 
 
-def seed_quotes(db, instruments: dict[str, Instrument], now: datetime) -> None:
+def seed_quotes(db, owner_id: int, instruments: dict[str, Instrument], now: datetime) -> None:
     rows = [
         Quote(
+            owner_id=owner_id,
             instrument_id=instruments["600519.SS"].id,
             quoted_at=now,
             price=Decimal("1688"),
@@ -287,6 +295,7 @@ def seed_quotes(db, instruments: dict[str, Instrument], now: datetime) -> None:
             provider_status=QuoteProviderStatus.SUCCESS,
         ),
         Quote(
+            owner_id=owner_id,
             instrument_id=instruments["511010.SS"].id,
             quoted_at=now,
             price=Decimal("1.061"),
@@ -295,6 +304,7 @@ def seed_quotes(db, instruments: dict[str, Instrument], now: datetime) -> None:
             provider_status=QuoteProviderStatus.SUCCESS,
         ),
         Quote(
+            owner_id=owner_id,
             instrument_id=instruments["AAPL"].id,
             quoted_at=now,
             price=Decimal("212"),
@@ -303,6 +313,7 @@ def seed_quotes(db, instruments: dict[str, Instrument], now: datetime) -> None:
             provider_status=QuoteProviderStatus.SUCCESS,
         ),
         Quote(
+            owner_id=owner_id,
             instrument_id=instruments["BND"].id,
             quoted_at=now,
             price=Decimal("73.2"),
@@ -316,6 +327,7 @@ def seed_quotes(db, instruments: dict[str, Instrument], now: datetime) -> None:
 
     create_manual_override(
         db,
+        owner_id=owner_id,
         instrument_id=instruments["AAPL"].id,
         price=Decimal("213.5"),
         currency="USD",
@@ -342,14 +354,18 @@ def main() -> None:
     db = SessionLocal()
     try:
         reset_database(db)
-        accounts = seed_accounts(db)
-        allocation_nodes = seed_allocation(db)
-        instruments = seed_instruments(db, accounts, allocation_nodes)
+        admin = ensure_bootstrap_admin(db)
+        ensure_bootstrap_invite_code(db, created_by_id=admin.id)
+        owner_id = admin.id
+
+        accounts = seed_accounts(db, owner_id)
+        allocation_nodes = seed_allocation(db, owner_id)
+        instruments = seed_instruments(db, owner_id, accounts, allocation_nodes)
         seed_fx_rates(db, now)
         db.commit()
 
-        seed_transactions(db, accounts, instruments, base_time)
-        seed_quotes(db, instruments, now)
+        seed_transactions(db, owner_id, accounts, instruments, base_time)
+        seed_quotes(db, owner_id, instruments, now)
         print_summary(db)
     finally:
         db.close()

@@ -153,6 +153,169 @@ class YahooQuoteAdapter:
             "quote_type": quote_type,
         }
 
+    async def fetch_daily_history(self, symbol: str, days: int = 365) -> list[dict]:
+        normalized = symbol.strip().upper()
+        if not normalized:
+            return []
+
+        candidates = [normalized]
+        if re.fullmatch(r"\d{6}", normalized):
+            candidates.extend([f"{normalized}.OF", f"{normalized}.SS", f"{normalized}.SZ"])
+        match_suffix = re.fullmatch(r"(\d{6})\.(SH|SS|SZ)", normalized)
+        if match_suffix:
+            digits, suffix = match_suffix.groups()
+            if suffix == "SH":
+                candidates.append(f"{digits}.SS")
+            elif suffix == "SS":
+                candidates.append(f"{digits}.SH")
+
+        deduped_candidates: list[str] = []
+        for item in candidates:
+            if item not in deduped_candidates:
+                deduped_candidates.append(item)
+
+        lookback_days = max(1, min(days, 365))
+        chart_range = "1y" if lookback_days >= 365 else f"{lookback_days}d"
+        async with httpx.AsyncClient(timeout=15.0, headers=self._request_headers(), follow_redirects=True) as client:
+            for candidate in deduped_candidates:
+                chart_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{candidate}"
+                resp = await client.get(chart_url, params={"interval": "1d", "range": chart_range})
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code in {401, 403, 404, 429, 503}:
+                        continue
+                    raise
+
+                payload = resp.json()
+                chart = payload.get("chart", {})
+                if chart.get("error") is not None:
+                    continue
+
+                results = chart.get("result") or []
+                if not results:
+                    continue
+
+                result = results[0]
+                meta = result.get("meta") or {}
+                currency = meta.get("currency") or self._infer_currency(candidate)
+                timestamps = result.get("timestamp") or []
+                quote_items = ((result.get("indicators") or {}).get("quote") or [{}])[0]
+                closes = quote_items.get("close") or []
+                cutoff_epoch = int((datetime.now(timezone.utc) - timedelta(days=lookback_days)).timestamp())
+
+                rows: list[dict] = []
+                for idx, ts in enumerate(timestamps):
+                    if not isinstance(ts, int) or ts < cutoff_epoch:
+                        continue
+                    close_value = closes[idx] if idx < len(closes) else None
+                    if close_value is None:
+                        continue
+                    try:
+                        close_decimal = Decimal(str(close_value))
+                    except Exception:  # noqa: BLE001
+                        continue
+                    rows.append(
+                        {
+                            "quoted_at_epoch": ts,
+                            "price": close_decimal,
+                            "currency": currency,
+                        }
+                    )
+
+                if rows:
+                    return rows
+
+            cn_fund_rows = await self._fetch_cn_fund_daily_history_from_eastmoney(client, normalized, lookback_days)
+            if cn_fund_rows:
+                return cn_fund_rows
+
+            return []
+
+    async def _fetch_cn_fund_daily_history_from_eastmoney(
+        self,
+        client: httpx.AsyncClient,
+        symbol: str,
+        lookback_days: int,
+    ) -> list[dict]:
+        fund_code = self._extract_cn_fund_code(symbol)
+        if not fund_code:
+            return []
+
+        endpoint = "https://fundf10.eastmoney.com/F10DataApi.aspx"
+        shanghai_tz = timezone(timedelta(hours=8))
+        cutoff_date = (datetime.now(shanghai_tz) - timedelta(days=lookback_days)).date()
+
+        page = 1
+        max_pages = 1
+        per_page = 49
+        rows: list[dict] = []
+
+        while page <= max_pages:
+            resp = await client.get(
+                endpoint,
+                params={
+                    "type": "lsjz",
+                    "code": fund_code,
+                    "page": str(page),
+                    "per": str(per_page),
+                    "sdate": "",
+                    "edate": "",
+                },
+            )
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in {400, 401, 403, 404, 429, 500, 502, 503, 504}:
+                    return []
+                raise
+
+            text = resp.text
+            if page == 1:
+                pages_match = re.search(r"pages:(\d+)", text)
+                if pages_match:
+                    try:
+                        max_pages = max(1, min(int(pages_match.group(1)), 60))
+                    except ValueError:
+                        max_pages = 1
+
+            # Table rows are ordered from newest to oldest.
+            day_rows = re.findall(r"<tr><td>(\d{4}-\d{2}-\d{2})</td><td[^>]*>([^<]+)</td>", text)
+            if not day_rows:
+                break
+
+            reached_cutoff = False
+            for day_str, nav_str in day_rows:
+                nav_clean = nav_str.strip().replace(",", "")
+                if not nav_clean or nav_clean == "--":
+                    continue
+                try:
+                    day_value = datetime.strptime(day_str, "%Y-%m-%d").date()
+                except ValueError:
+                    continue
+                if day_value < cutoff_date:
+                    reached_cutoff = True
+                    continue
+                try:
+                    nav_value = Decimal(nav_clean)
+                except Exception:  # noqa: BLE001
+                    continue
+
+                quoted_dt = datetime(day_value.year, day_value.month, day_value.day, 15, 0, tzinfo=shanghai_tz)
+                rows.append(
+                    {
+                        "quoted_at_epoch": int(quoted_dt.astimezone(timezone.utc).timestamp()),
+                        "price": nav_value,
+                        "currency": "CNY",
+                    }
+                )
+
+            if reached_cutoff:
+                break
+            page += 1
+
+        return rows
+
     async def _fetch_cn_fund_from_eastmoney(self, client: httpx.AsyncClient, symbol: str) -> dict | None:
         fund_code = self._extract_cn_fund_code(symbol)
         if not fund_code:

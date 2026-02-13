@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentUser, get_current_user
 from app.adapters.yahoo import YahooQuoteAdapter
 from app.core.config import get_settings
 from app.db.session import get_db
@@ -93,10 +94,14 @@ def _build_symbol_candidates(raw_symbol: str) -> list[str]:
 
 
 @router.post("/refresh", response_model=QuoteRefreshResponse)
-async def refresh_quotes_endpoint(payload: QuoteRefreshRequest, db: Session = Depends(get_db)) -> dict:
+async def refresh_quotes_endpoint(
+    payload: QuoteRefreshRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     settings = get_settings()
     adapter = YahooQuoteAdapter(settings.yahoo_quote_url)
-    return await refresh_quotes(db, adapter, instrument_ids=payload.instrument_ids)
+    return await refresh_quotes(db, adapter, owner_id=current_user.id, instrument_ids=payload.instrument_ids)
 
 
 @router.get("/lookup", response_model=YahooLookupQuoteRead)
@@ -177,15 +182,16 @@ async def lookup_quote_by_symbol(symbol: str = Query(..., min_length=1, max_leng
 @router.get("/latest", response_model=list[LatestQuoteRead])
 def list_latest_quotes(
     instrument_ids: list[int] | None = Query(default=None),
+    current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    stmt = select(Instrument.id).order_by(Instrument.id)
+    stmt = select(Instrument.id).where(Instrument.owner_id == current_user.id).order_by(Instrument.id)
     if instrument_ids:
         stmt = stmt.where(Instrument.id.in_(instrument_ids))
 
     rows = []
     for instrument_id in db.scalars(stmt):
-        price, currency, source = get_latest_price(db, instrument_id)
+        price, currency, source = get_latest_price(db, current_user.id, instrument_id)
         rows.append(
             {
                 "instrument_id": instrument_id,
@@ -198,18 +204,30 @@ def list_latest_quotes(
 
 
 @router.get("/manual-overrides", response_model=list[ManualPriceOverrideRead])
-def list_manual_overrides(db: Session = Depends(get_db)) -> list[ManualPriceOverride]:
-    stmt = select(ManualPriceOverride).order_by(desc(ManualPriceOverride.overridden_at), desc(ManualPriceOverride.id))
+def list_manual_overrides(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ManualPriceOverride]:
+    stmt = (
+        select(ManualPriceOverride)
+        .where(ManualPriceOverride.owner_id == current_user.id)
+        .order_by(desc(ManualPriceOverride.overridden_at), desc(ManualPriceOverride.id))
+    )
     return list(db.scalars(stmt))
 
 
 @router.post("/manual-overrides", response_model=ManualPriceOverrideRead)
-def create_manual_override_endpoint(payload: ManualPriceOverrideCreate, db: Session = Depends(get_db)) -> ManualPriceOverride:
-    if db.get(Instrument, payload.instrument_id) is None:
+def create_manual_override_endpoint(
+    payload: ManualPriceOverrideCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ManualPriceOverride:
+    if db.scalar(select(Instrument.id).where(Instrument.id == payload.instrument_id, Instrument.owner_id == current_user.id)) is None:
         raise HTTPException(status_code=404, detail="Instrument not found")
 
     return create_manual_override(
         db,
+        owner_id=current_user.id,
         instrument_id=payload.instrument_id,
         price=payload.price,
         currency=payload.currency,

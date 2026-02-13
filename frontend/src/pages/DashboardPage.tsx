@@ -461,14 +461,18 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load(days = curveDays) {
-    setLoading(true);
+  async function load(days = curveDays, options?: { silent?: boolean }) {
+    const silent = options?.silent ?? false;
+    if (!silent) {
+      setLoading(true);
+    }
     try {
+      const requestTs = Date.now();
       const [summaryResp, holdingsResp, instrumentsResp, curveResp, nodesResp, groupsResp, tagsResp, selectionsResp, driftResp] = await Promise.all([
-        api.get<DashboardSummary>("/dashboard/summary"),
+        api.get<DashboardSummary>(`/dashboard/summary?ts=${requestTs}`),
         api.get<Holding[]>("/holdings"),
         api.get<Instrument[]>("/instruments"),
-        api.get<ReturnCurvePoint[]>(`/dashboard/returns-curve?days=${days}`),
+        api.get<ReturnCurvePoint[]>(`/dashboard/returns-curve?days=${days}&ts=${requestTs}`),
         api.get<AllocationNode[]>("/allocation/nodes"),
         api.get<AllocationTagGroup[]>("/allocation/tag-groups"),
         api.get<AllocationTag[]>("/allocation/tags"),
@@ -488,12 +492,21 @@ export default function DashboardPage() {
     } catch (err) {
       setError(String(err));
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
     void load(curveDays);
+  }, [curveDays]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void load(curveDays, { silent: true });
+    }, 60_000);
+    return () => window.clearInterval(timer);
   }, [curveDays]);
 
   useEffect(() => {

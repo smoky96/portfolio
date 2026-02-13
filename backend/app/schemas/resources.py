@@ -5,7 +5,79 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import AccountType, InstrumentType, TransactionType
+from app.models.enums import AccountType, InstrumentType, TransactionType, UserRole
+
+
+class UserRead(BaseModel):
+    id: int
+    username: str
+    role: UserRole
+    is_active: bool
+    last_login_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class AuthTokenRead(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_at: datetime
+    user: UserRead
+
+
+class RegisterRequest(BaseModel):
+    invite_code: str = Field(min_length=1, max_length=64)
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class AdminUserCreate(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+    role: UserRole = UserRole.MEMBER
+    is_active: bool = True
+
+
+class AdminUserUpdate(BaseModel):
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    role: UserRole | None = None
+    is_active: bool | None = None
+
+
+class InviteCodeCreate(BaseModel):
+    code: str | None = Field(default=None, min_length=4, max_length=64)
+    expires_at: datetime | None = None
+    max_uses: int | None = Field(default=None, ge=1, le=1000000)
+    note: str | None = Field(default=None, max_length=255)
+
+
+class InviteCodeUpdate(BaseModel):
+    is_active: bool | None = None
+    expires_at: datetime | None = None
+    max_uses: int | None = Field(default=None, ge=1, le=1000000)
+    note: str | None = Field(default=None, max_length=255)
+
+
+class InviteCodeRead(BaseModel):
+    id: int
+    code: str
+    created_by_id: int | None
+    expires_at: datetime | None
+    max_uses: int | None
+    used_count: int
+    is_active: bool
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AccountBase(BaseModel):

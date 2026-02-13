@@ -246,10 +246,14 @@ export default function TransactionsPage() {
   const createPrice = Form.useWatch("price", form) as number | undefined;
   const createFee = Form.useWatch("fee", form) as number | undefined;
   const createTax = Form.useWatch("tax", form) as number | undefined;
+  const editType = (Form.useWatch("type", editForm) as string | undefined) ?? editingTx?.type ?? "CASH_IN";
+  const editQuantity = Form.useWatch("quantity", editForm) as number | undefined;
+  const editPrice = Form.useWatch("price", editForm) as number | undefined;
 
   const isCreateTradeType = TRADE_TYPES.has(createType);
   const createNeedsInstrument = INSTRUMENT_REQUIRED_TYPES.has(createType);
   const createNeedsCounterparty = createType === "INTERNAL_TRANSFER";
+  const isEditTradeType = TRADE_TYPES.has(editType);
 
   async function load() {
     setLoading(true);
@@ -558,6 +562,19 @@ export default function TransactionsPage() {
     form.setFieldValue("amount", round8(quantity * price));
   }, [isCreateTradeType, createQuantity, createPrice, form]);
 
+  useEffect(() => {
+    if (!editingTx || !isEditTradeType) {
+      return;
+    }
+    const quantity = Number(editQuantity ?? 0);
+    const price = Number(editPrice ?? 0);
+    if (!Number.isFinite(quantity) || !Number.isFinite(price) || quantity <= 0 || price <= 0) {
+      editForm.setFieldValue("amount", undefined);
+      return;
+    }
+    editForm.setFieldValue("amount", round8(quantity * price));
+  }, [editingTx, isEditTradeType, editQuantity, editPrice, editForm]);
+
   const createSettlementPreview = useMemo(() => {
     if (!isCreateTradeType) {
       return null;
@@ -739,17 +756,30 @@ export default function TransactionsPage() {
       return;
     }
 
+    const isTrade = TRADE_TYPES.has(values.type);
+    const quantity = isTrade ? Number(values.quantity ?? 0) : null;
+    const price = isTrade ? Number(values.price ?? 0) : null;
+    if (isTrade && (!quantity || !price || quantity <= 0 || price <= 0)) {
+      setError("买入/卖出必须填写有效的数量和价格");
+      return;
+    }
+    const principalAmount = isTrade ? round8((quantity ?? 0) * (price ?? 0)) : Number(values.amount ?? 0);
+    if (!Number.isFinite(principalAmount) || principalAmount <= 0) {
+      setError("金额必须大于 0");
+      return;
+    }
+
     setRowActionLoadingId(editingTx.id);
     try {
       await api.patch<Transaction>(`/transactions/${editingTx.id}`, {
         type: values.type,
         account_id: values.account_id,
         instrument_id: values.instrument_id ?? null,
-        quantity: values.quantity ?? null,
-        price: values.price ?? null,
-        amount: values.amount,
-        fee: values.fee ?? 0,
-        tax: values.tax ?? 0,
+        quantity: isTrade ? quantity : null,
+        price: isTrade ? price : null,
+        amount: principalAmount,
+        fee: isTrade ? Number(values.fee ?? 0) : 0,
+        tax: isTrade ? Number(values.tax ?? 0) : 0,
         currency: values.currency.toUpperCase(),
         executed_at: shanghaiLocalToIso(values.executed_at),
         executed_tz: SHANGHAI_TZ,
@@ -803,15 +833,7 @@ export default function TransactionsPage() {
     fd.append("file", file.originFileObj);
 
     try {
-      const res = await fetch(`/api/v1/transactions/import-csv?rollback_on_error=false`, {
-        method: "POST",
-        body: fd
-      });
-
-      if (!res.ok) {
-        throw new Error(await res.text());
-      }
-
+      await api.postForm(`/transactions/import-csv?rollback_on_error=false`, fd);
       setSuccessMessage("CSV 导入完成");
       setFileList([]);
       await load();
@@ -1256,8 +1278,8 @@ export default function TransactionsPage() {
             <Form.Item label="价格" name="price">
               <InputNumber min={0} precision={8} style={{ width: "100%" }} />
             </Form.Item>
-            <Form.Item label="金额" name="amount" rules={[{ required: true, message: "请输入金额" }]}>
-              <InputNumber min={0.00000001} precision={8} style={{ width: "100%" }} />
+            <Form.Item label={isEditTradeType ? "成交金额（自动）" : "金额"} name="amount" rules={[{ required: true, message: "请输入金额" }]}>
+              <InputNumber min={0.00000001} precision={8} style={{ width: "100%" }} disabled={isEditTradeType} />
             </Form.Item>
             <Form.Item label="费用" name="fee">
               <InputNumber min={0} precision={8} style={{ width: "100%" }} />

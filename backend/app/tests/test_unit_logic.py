@@ -10,6 +10,7 @@ from app.services.positions import _compute_position_from_transactions
 
 def make_tx(tx_type: TransactionType, amount: str, quantity: str | None = None, fee: str = "0", tax: str = "0") -> Transaction:
     return Transaction(
+        owner_id=1,
         type=tx_type,
         account_id=1,
         instrument_id=1,

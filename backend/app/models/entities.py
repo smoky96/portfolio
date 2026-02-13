@@ -18,7 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.enums import AccountType, InstrumentType, QuoteProviderStatus, TransactionType
+from app.models.enums import AccountType, InstrumentType, QuoteProviderStatus, TransactionType, UserRole
 
 
 def utc_now() -> datetime:
@@ -29,18 +29,24 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
     type: Mapped[AccountType] = mapped_column(Enum(AccountType, name="account_type"), nullable=False)
     base_currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_account_owner_name"),
+    )
+
 
 class AllocationNode(Base):
     __tablename__ = "allocation_nodes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("allocation_nodes.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     target_weight: Mapped[Decimal] = mapped_column(Numeric(10, 4), nullable=False)
@@ -51,7 +57,7 @@ class AllocationNode(Base):
     parent: Mapped[AllocationNode | None] = relationship(remote_side=[id], backref="children")
 
     __table_args__ = (
-        UniqueConstraint("parent_id", "name", name="uq_allocation_node_parent_name"),
+        UniqueConstraint("owner_id", "parent_id", "name", name="uq_allocation_node_owner_parent_name"),
     )
 
 
@@ -59,16 +65,22 @@ class AllocationTagGroup(Base):
     __tablename__ = "allocation_tag_groups"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_allocation_tag_group_owner_name"),
+    )
 
 
 class AllocationTag(Base):
     __tablename__ = "allocation_tags"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("allocation_tag_groups.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -76,7 +88,7 @@ class AllocationTag(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
     __table_args__ = (
-        UniqueConstraint("group_id", "name", name="uq_allocation_tag_group_name"),
+        UniqueConstraint("owner_id", "group_id", "name", name="uq_allocation_tag_owner_group_name"),
     )
 
 
@@ -84,13 +96,14 @@ class InstrumentTagSelection(Base):
     __tablename__ = "instrument_tag_selections"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False, index=True)
     group_id: Mapped[int] = mapped_column(ForeignKey("allocation_tag_groups.id", ondelete="CASCADE"), nullable=False, index=True)
     tag_id: Mapped[int] = mapped_column(ForeignKey("allocation_tags.id", ondelete="CASCADE"), nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
     __table_args__ = (
-        UniqueConstraint("instrument_id", "group_id", name="uq_instrument_group_tag_selection"),
+        UniqueConstraint("owner_id", "instrument_id", "group_id", name="uq_instrument_owner_group_tag_selection"),
     )
 
 
@@ -98,7 +111,8 @@ class Instrument(Base):
     __tablename__ = "instruments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    symbol: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     market: Mapped[str] = mapped_column(String(32), nullable=False)
     type: Mapped[InstrumentType] = mapped_column(Enum(InstrumentType, name="instrument_type"), nullable=False)
     currency: Mapped[str] = mapped_column(String(8), nullable=False)
@@ -108,11 +122,16 @@ class Instrument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
+    __table_args__ = (
+        UniqueConstraint("owner_id", "symbol", name="uq_instrument_owner_symbol"),
+    )
+
 
 class Transaction(Base):
     __tablename__ = "transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     type: Mapped[TransactionType] = mapped_column(Enum(TransactionType, name="transaction_type"), nullable=False, index=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     instrument_id: Mapped[int | None] = mapped_column(ForeignKey("instruments.id", ondelete="SET NULL"), nullable=True)
@@ -133,6 +152,7 @@ class PositionSnapshot(Base):
     __tablename__ = "positions_snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False)
     quantity: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False, default=Decimal("0"))
@@ -140,7 +160,7 @@ class PositionSnapshot(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
     __table_args__ = (
-        UniqueConstraint("account_id", "instrument_id", name="uq_position_account_instrument"),
+        UniqueConstraint("owner_id", "account_id", "instrument_id", name="uq_position_owner_account_instrument"),
     )
 
 
@@ -148,6 +168,7 @@ class Quote(Base):
     __tablename__ = "quotes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False, index=True)
     quoted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
@@ -179,6 +200,7 @@ class ManualPriceOverride(Base):
     __tablename__ = "manual_price_overrides"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     instrument_id: Mapped[int] = mapped_column(ForeignKey("instruments.id", ondelete="CASCADE"), nullable=False, index=True)
     price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
     currency: Mapped[str] = mapped_column(String(8), nullable=False)
@@ -191,9 +213,39 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     entity: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_id: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     before_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     after_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole, name="user_role"), nullable=False, default=UserRole.MEMBER)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class InviteCode(Base):
+    __tablename__ = "invite_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    used_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)

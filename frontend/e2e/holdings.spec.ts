@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { authedGet, gotoWithLogin } from "./helpers/auth";
+
 function toNumber(value: string): number {
   const normalized = value.replace(/,/g, "").replace(/[%\s]/g, "");
   const parsed = Number(normalized);
@@ -18,7 +20,7 @@ async function safeClick(locator: ReturnType<Page["locator"]>) {
 
 test.describe("Holdings and custom instruments @holdings", () => {
   test("holdings summary matches detail table and no instrument-config sections", async ({ page }) => {
-    await page.goto("/holdings");
+    await gotoWithLogin(page, "/holdings");
     await expect(page.getByText("持仓明细")).toBeVisible();
 
     await expect(page.locator(".ant-card-head-title").filter({ hasText: "流水标的" })).toHaveCount(0);
@@ -28,7 +30,7 @@ test.describe("Holdings and custom instruments @holdings", () => {
     const detailCard = page.locator(".ant-card").filter({ hasText: "持仓明细" }).first();
     await expect(detailCard.locator(".ant-table-tbody tr.ant-table-row").first()).toBeVisible();
 
-    const holdingsResponse = await page.request.get("/api/v1/holdings");
+    const holdingsResponse = await authedGet(page.request, "/api/v1/holdings");
     expect(holdingsResponse.ok()).toBeTruthy();
     const holdings = (await holdingsResponse.json()) as Array<{
       market_value: string;
@@ -48,7 +50,7 @@ test.describe("Holdings and custom instruments @holdings", () => {
     expect(toNumber(costText)).toBeCloseTo(totalCost, 3);
     expect(toNumber(pnlText)).toBeCloseTo(totalPnl, 3);
 
-    const driftResponse = await page.request.get("/api/v1/rebalance/drift");
+    const driftResponse = await authedGet(page.request, "/api/v1/rebalance/drift");
     expect(driftResponse.ok()).toBeTruthy();
     const driftItems = (await driftResponse.json()) as Array<{
       is_alerted: boolean;
@@ -64,7 +66,7 @@ test.describe("Holdings and custom instruments @holdings", () => {
     const instrumentName = `自定义测试标的${unique}`;
     const updatedPrice = "12.345";
 
-    await page.goto("/custom-instruments");
+    await gotoWithLogin(page, "/custom-instruments");
     await expect(page.getByText("新增自定义标的")).toBeVisible();
     await expect(page.getByText("自定义标的一览")).toBeVisible();
 

@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { authedGet, authedPost, gotoWithLogin } from "./helpers/auth";
+
 function formItem(container: Locator, label: string): Locator {
   return container.locator(`.ant-form-item:has(label:has-text("${label}"))`).first();
 }
@@ -28,7 +30,7 @@ async function selectToolbarOption(page: Page, toolbar: Locator, index: number, 
 
 test.describe("Transactions interactions @transactions", () => {
   test("manual form adapts by type and auto-fills instrument/amount", async ({ page }) => {
-    await page.goto("/transactions");
+    await gotoWithLogin(page, "/transactions");
 
     const manualCard = page.locator(".ant-card").filter({ hasText: "手工录入流水" }).first();
     await expect(manualCard).toBeVisible();
@@ -67,12 +69,69 @@ test.describe("Transactions interactions @transactions", () => {
     await expect(manualCard.getByText("结算金额（含费税）")).toBeVisible();
   });
 
+  test("edit modal auto-recalculates amount for trade transactions", async ({ page, request }) => {
+    const unique = Date.now().toString().slice(-6);
+    const editNote = `E2E_EDIT_${unique}`;
+
+    const accountsResp = await authedGet(request, "/api/v1/accounts");
+    expect(accountsResp.ok()).toBeTruthy();
+    const accounts = (await accountsResp.json()) as Array<{ id: number; name: string }>;
+    expect(accounts.length).toBeGreaterThan(0);
+
+    const instrumentsResp = await authedGet(request, "/api/v1/instruments");
+    expect(instrumentsResp.ok()).toBeTruthy();
+    const instruments = (await instrumentsResp.json()) as Array<{ id: number; symbol: string; currency: string }>;
+    expect(instruments.length).toBeGreaterThan(0);
+
+    const accountId = accounts[0].id;
+    const instrumentId = instruments[0].id;
+    const currency = instruments[0].currency || "CNY";
+
+    const createResp = await authedPost(request, "/api/v1/transactions", {
+      data: {
+        type: "BUY",
+        account_id: accountId,
+        instrument_id: instrumentId,
+        quantity: "1",
+        price: "100",
+        amount: "100",
+        fee: "0",
+        tax: "0",
+        currency,
+        executed_at: new Date().toISOString(),
+        executed_tz: "Asia/Shanghai",
+        note: editNote
+      }
+    });
+    expect(createResp.ok()).toBeTruthy();
+
+    await gotoWithLogin(page, "/transactions");
+
+    const detailCard = page.locator(".ant-card").filter({ hasText: "流水明细" }).first();
+    await expect(detailCard).toBeVisible();
+    await detailCard.locator('input[placeholder*="搜索"]').first().fill(editNote);
+    const editButton = detailCard.getByRole("button", { name: /编\s*辑/ }).first();
+    await expect(editButton).toBeVisible();
+    await safeClick(editButton);
+
+    const modal = page.locator(".ant-modal:visible").first();
+    await expect(modal.getByText("编辑流水")).toBeVisible();
+    await expect(formItem(modal, "金额")).toBeVisible();
+
+    await formItem(modal, "数量").locator("input").first().fill("2");
+    await formItem(modal, "价格").locator("input").first().fill("88.5");
+
+    const amountInput = formItem(modal, "金额").locator("input").first();
+    const amountValue = Number((await amountInput.inputValue()).replace(/,/g, ""));
+    expect(amountValue).toBeCloseTo(177, 6);
+  });
+
   test("custom instruments can be selected and recorded in manual transactions", async ({ page, request }, testInfo) => {
     const unique = Date.now().toString().slice(-6);
     const symbol = `CUST_TX_${testInfo.project.name.replace(/[^A-Za-z0-9]/g, "").toUpperCase()}_${unique}`;
     const customName = `流水自定义标的${unique}`;
 
-    const createResp = await request.post("/api/v1/instruments", {
+    const createResp = await authedPost(request, "/api/v1/instruments", {
       data: {
         symbol,
         market: "CUSTOM",
@@ -85,7 +144,7 @@ test.describe("Transactions interactions @transactions", () => {
     });
     expect(createResp.ok()).toBeTruthy();
 
-    await page.goto("/transactions");
+    await gotoWithLogin(page, "/transactions");
 
     const manualCard = page.locator(".ant-card").filter({ hasText: "手工录入流水" }).first();
     await expect(manualCard).toBeVisible();
@@ -133,7 +192,7 @@ test.describe("Transactions interactions @transactions", () => {
       });
     });
 
-    await page.goto("/transactions");
+    await gotoWithLogin(page, "/transactions");
 
     const manualCard = page.locator(".ant-card").filter({ hasText: "手工录入流水" }).first();
     await expect(manualCard).toBeVisible();
@@ -186,7 +245,7 @@ test.describe("Transactions interactions @transactions", () => {
       });
     });
 
-    await page.goto("/transactions");
+    await gotoWithLogin(page, "/transactions");
 
     const manualCard = page.locator(".ant-card").filter({ hasText: "手工录入流水" }).first();
     await expect(manualCard).toBeVisible();
@@ -208,7 +267,7 @@ test.describe("Transactions interactions @transactions", () => {
   });
 
   test("csv template can be downloaded", async ({ page }) => {
-    await page.goto("/transactions");
+    await gotoWithLogin(page, "/transactions");
 
     const downloadBtn = page.getByRole("button", { name: "下载 CSV 模板" });
     await expect(downloadBtn).toBeVisible();
@@ -230,7 +289,7 @@ test.describe("Transactions interactions @transactions", () => {
   });
 
   test("details support multi-filters and colored tags", async ({ page }) => {
-    await page.goto("/transactions");
+    await gotoWithLogin(page, "/transactions");
 
     const detailCard = page.locator(".ant-card").filter({ hasText: "流水明细" }).first();
     await expect(detailCard).toBeVisible();

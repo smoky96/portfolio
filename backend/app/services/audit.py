@@ -8,6 +8,8 @@ from app.models import AuditLog
 def write_audit_log(
     db: Session,
     *,
+    owner_id: int | None = None,
+    actor_user_id: int | None = None,
     entity: str,
     entity_id: str,
     action: str,
@@ -15,6 +17,8 @@ def write_audit_log(
     after_state: dict | None,
 ) -> None:
     log = AuditLog(
+        owner_id=owner_id,
+        actor_user_id=actor_user_id,
         entity=entity,
         entity_id=entity_id,
         action=action,

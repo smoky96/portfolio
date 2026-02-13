@@ -45,10 +45,14 @@ def _compute_position_from_transactions(transactions: list[Transaction]) -> tupl
     return quantity, avg_cost
 
 
-def rebuild_position_snapshot(db: Session, account_id: int, instrument_id: int) -> PositionSnapshot:
+def rebuild_position_snapshot(db: Session, owner_id: int, account_id: int, instrument_id: int) -> PositionSnapshot:
     tx_stmt: Select[tuple[Transaction]] = (
         select(Transaction)
-        .where(Transaction.account_id == account_id, Transaction.instrument_id == instrument_id)
+        .where(
+            Transaction.owner_id == owner_id,
+            Transaction.account_id == account_id,
+            Transaction.instrument_id == instrument_id,
+        )
         .order_by(Transaction.executed_at, Transaction.id)
     )
     txs = list(db.scalars(tx_stmt))
@@ -56,6 +60,7 @@ def rebuild_position_snapshot(db: Session, account_id: int, instrument_id: int) 
 
     snapshot = db.scalar(
         select(PositionSnapshot).where(
+            PositionSnapshot.owner_id == owner_id,
             PositionSnapshot.account_id == account_id,
             PositionSnapshot.instrument_id == instrument_id,
         )
@@ -63,6 +68,7 @@ def rebuild_position_snapshot(db: Session, account_id: int, instrument_id: int) 
 
     if snapshot is None:
         snapshot = PositionSnapshot(
+            owner_id=owner_id,
             account_id=account_id,
             instrument_id=instrument_id,
             quantity=quantity,
@@ -77,15 +83,19 @@ def rebuild_position_snapshot(db: Session, account_id: int, instrument_id: int) 
     return snapshot
 
 
-def list_holdings(db: Session, base_currency: str) -> list[dict]:
+def list_holdings(db: Session, base_currency: str, owner_id: int) -> list[dict]:
     stmt = (
         select(PositionSnapshot, Instrument)
         .join(Instrument, Instrument.id == PositionSnapshot.instrument_id)
-        .where(PositionSnapshot.quantity > ZERO)
+        .where(
+            PositionSnapshot.owner_id == owner_id,
+            Instrument.owner_id == owner_id,
+            PositionSnapshot.quantity > ZERO,
+        )
     )
     holdings: list[dict] = []
     for snapshot, instrument in db.execute(stmt).all():
-        market_price, quote_currency, _ = get_latest_price(db, instrument.id)
+        market_price, quote_currency, _ = get_latest_price(db, owner_id, instrument.id)
         if market_price is None:
             market_price = Decimal("0")
             quote_currency = instrument.currency

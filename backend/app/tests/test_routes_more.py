@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -119,17 +120,17 @@ def test_allocation_node_create_auto_moves_instruments_and_delete_cascades(clien
 
 
 def test_allocation_update_branches(client, db_session: Session):
-    root = AllocationNode(parent_id=None, name="Root", target_weight=Decimal("100"), order_index=0)
+    root = AllocationNode(owner_id=1, parent_id=None, name="Root", target_weight=Decimal("100"), order_index=0)
     db_session.add(root)
     db_session.flush()
-    child = AllocationNode(parent_id=root.id, name="Child", target_weight=Decimal("100"), order_index=0)
+    child = AllocationNode(owner_id=1, parent_id=root.id, name="Child", target_weight=Decimal("100"), order_index=0)
     db_session.add(child)
     db_session.flush()
-    grandchild = AllocationNode(parent_id=child.id, name="Grand", target_weight=Decimal("100"), order_index=0)
+    grandchild = AllocationNode(owner_id=1, parent_id=child.id, name="Grand", target_weight=Decimal("100"), order_index=0)
     db_session.add(grandchild)
     db_session.flush()
 
-    target = AllocationNode(parent_id=None, name="Target", target_weight=Decimal("100"), order_index=0)
+    target = AllocationNode(owner_id=1, parent_id=None, name="Target", target_weight=Decimal("100"), order_index=0)
     db_session.add(target)
     db_session.commit()
 
@@ -527,10 +528,172 @@ def test_dashboard_returns_curve_endpoint(client):
 
 
 @pytest.mark.asyncio
+async def test_holdings_endpoint_does_not_trigger_auto_quote_refresh_by_default(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.holdings.get_settings",
+        lambda: SimpleNamespace(
+            base_currency="CNY",
+            yahoo_quote_url="https://query1.finance.yahoo.com/v7/finance/quote",
+            quote_auto_refresh_stale_minutes=5,
+            quote_auto_refresh_on_read=False,
+        ),
+    )
+
+    async def fail_auto_refresh(*args, **kwargs):
+        raise AssertionError("auto refresh should not be called when quote_auto_refresh_on_read is disabled")
+
+    monkeypatch.setattr("app.api.routes.holdings.auto_refresh_quotes_for_active_positions", fail_auto_refresh)
+
+    resp = client.get("/api/v1/holdings")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_holdings_endpoint_triggers_auto_quote_refresh_when_enabled(client, monkeypatch):
+    called: dict[str, int] = {}
+
+    monkeypatch.setattr(
+        "app.api.routes.holdings.get_settings",
+        lambda: SimpleNamespace(
+            base_currency="CNY",
+            yahoo_quote_url="https://query1.finance.yahoo.com/v7/finance/quote",
+            quote_auto_refresh_stale_minutes=5,
+            quote_auto_refresh_on_read=True,
+        ),
+    )
+
+    async def fake_auto_refresh(db, adapter, owner_id, stale_after_minutes):
+        called["owner_id"] = owner_id
+        called["stale_after_minutes"] = stale_after_minutes
+        return {"requested": 0, "updated": 0, "failed": 0, "details": []}
+
+    monkeypatch.setattr("app.api.routes.holdings.auto_refresh_quotes_for_active_positions", fake_auto_refresh)
+
+    resp = client.get("/api/v1/holdings")
+    assert resp.status_code == 200
+    assert called["owner_id"] == 1
+    assert called["stale_after_minutes"] > 0
+
+
+@pytest.mark.asyncio
+async def test_dashboard_summary_endpoint_does_not_trigger_auto_quote_refresh_by_default(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.dashboard.get_settings",
+        lambda: SimpleNamespace(
+            base_currency="CNY",
+            drift_alert_threshold=0.05,
+            yahoo_quote_url="https://query1.finance.yahoo.com/v7/finance/quote",
+            quote_auto_refresh_stale_minutes=5,
+            quote_auto_refresh_on_read=False,
+        ),
+    )
+
+    async def fail_auto_refresh(*args, **kwargs):
+        raise AssertionError("auto refresh should not be called when quote_auto_refresh_on_read is disabled")
+
+    monkeypatch.setattr("app.api.routes.dashboard.auto_refresh_quotes_for_active_positions", fail_auto_refresh)
+
+    resp = client.get("/api/v1/dashboard/summary")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_dashboard_summary_endpoint_triggers_auto_quote_refresh_when_enabled(client, monkeypatch):
+    called: dict[str, int] = {}
+
+    monkeypatch.setattr(
+        "app.api.routes.dashboard.get_settings",
+        lambda: SimpleNamespace(
+            base_currency="CNY",
+            drift_alert_threshold=0.05,
+            yahoo_quote_url="https://query1.finance.yahoo.com/v7/finance/quote",
+            quote_auto_refresh_stale_minutes=5,
+            quote_auto_refresh_on_read=True,
+        ),
+    )
+
+    async def fake_auto_refresh(db, adapter, owner_id, stale_after_minutes):
+        called["owner_id"] = owner_id
+        called["stale_after_minutes"] = stale_after_minutes
+        return {"requested": 0, "updated": 0, "failed": 0, "details": []}
+
+    monkeypatch.setattr("app.api.routes.dashboard.auto_refresh_quotes_for_active_positions", fake_auto_refresh)
+
+    resp = client.get("/api/v1/dashboard/summary")
+    assert resp.status_code == 200
+    assert called["owner_id"] == 1
+    assert called["stale_after_minutes"] > 0
+
+
+@pytest.mark.asyncio
+async def test_dashboard_returns_curve_endpoint_does_not_trigger_history_backfill_when_disabled(client, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.routes.dashboard.get_settings",
+        lambda: SimpleNamespace(
+            base_currency="CNY",
+            quote_auto_refresh_on_read=False,
+            yahoo_quote_url="https://query1.finance.yahoo.com/v7/finance/quote",
+            quote_history_backfill_days=365,
+            quote_history_backfill_min_points=2,
+            quote_history_backfill_cooldown_minutes=60,
+        ),
+    )
+
+    async def fail_backfill(*args, **kwargs):
+        raise AssertionError("history backfill should not be called when quote_auto_refresh_on_read is disabled")
+
+    monkeypatch.setattr("app.api.routes.dashboard.auto_backfill_history_for_active_positions", fail_backfill)
+
+    resp = client.get("/api/v1/dashboard/returns-curve?days=30")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_dashboard_returns_curve_endpoint_triggers_history_backfill_when_enabled(client, monkeypatch):
+    called: dict[str, int] = {}
+
+    monkeypatch.setattr(
+        "app.api.routes.dashboard.get_settings",
+        lambda: SimpleNamespace(
+            base_currency="CNY",
+            quote_auto_refresh_on_read=True,
+            yahoo_quote_url="https://query1.finance.yahoo.com/v7/finance/quote",
+            quote_history_backfill_days=365,
+            quote_history_backfill_min_points=2,
+            quote_history_backfill_cooldown_minutes=60,
+        ),
+    )
+
+    async def fake_backfill(
+        db,
+        adapter,
+        *,
+        owner_id,
+        lookback_days,
+        min_points_threshold,
+        cooldown_minutes,
+    ):
+        called["owner_id"] = owner_id
+        called["lookback_days"] = lookback_days
+        called["min_points_threshold"] = min_points_threshold
+        called["cooldown_minutes"] = cooldown_minutes
+        return {"requested": 0, "updated": 0, "failed": 0, "details": []}
+
+    monkeypatch.setattr("app.api.routes.dashboard.auto_backfill_history_for_active_positions", fake_backfill)
+
+    resp = client.get("/api/v1/dashboard/returns-curve?days=30")
+    assert resp.status_code == 200
+    assert called["owner_id"] == 1
+    assert called["lookback_days"] == 365
+    assert called["min_points_threshold"] == 2
+    assert called["cooldown_minutes"] == 60
+
+
+@pytest.mark.asyncio
 async def test_quotes_routes_refresh_and_override(client, db_session: Session, monkeypatch):
     now = datetime.now(timezone.utc).isoformat()
 
-    async def fake_refresh_quotes(db, adapter, instrument_ids=None):
+    async def fake_refresh_quotes(db, adapter, owner_id, instrument_ids=None):
         return {"requested": 1, "updated": 1, "failed": 0, "details": [{"symbol": "AAPL"}]}
 
     monkeypatch.setattr("app.api.routes.quotes.refresh_quotes", fake_refresh_quotes)
@@ -553,11 +716,12 @@ async def test_quotes_routes_refresh_and_override(client, db_session: Session, m
     assert resp.status_code == 404
 
     # create needed refs directly
-    account = Account(name="Q-Account", type=AccountType.BROKERAGE, base_currency="USD", is_active=True)
-    node = AllocationNode(parent_id=None, name="Q-Node", target_weight=Decimal("100"), order_index=0)
+    account = Account(owner_id=1, name="Q-Account", type=AccountType.BROKERAGE, base_currency="USD", is_active=True)
+    node = AllocationNode(owner_id=1, parent_id=None, name="Q-Node", target_weight=Decimal("100"), order_index=0)
     db_session.add_all([account, node])
     db_session.flush()
     instrument = Instrument(
+        owner_id=1,
         symbol="AAPL",
         market="US",
         type=InstrumentType.STOCK,

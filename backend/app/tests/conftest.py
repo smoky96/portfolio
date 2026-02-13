@@ -7,9 +7,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.deps import CurrentUser, get_current_admin, get_current_user
 from app.api.router import api_router
+from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import get_db
+from app.models import User, UserRole
 
 
 @pytest.fixture()
@@ -23,6 +26,14 @@ def db_session() -> Generator[Session, None, None]:
     Base.metadata.create_all(bind=engine)
 
     db = TestingSessionLocal()
+    admin = User(
+        username="admin",
+        password_hash=hash_password("admin123"),
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    db.add(admin)
+    db.commit()
     try:
         yield db
     finally:
@@ -42,6 +53,18 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
             pass
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id=1,
+        username="admin",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
+    app.dependency_overrides[get_current_admin] = lambda: CurrentUser(
+        id=1,
+        username="admin",
+        role=UserRole.ADMIN,
+        is_active=True,
+    )
 
     with TestClient(app) as c:
         yield c

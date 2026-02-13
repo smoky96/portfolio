@@ -25,3 +25,8 @@ class QuoteProviderStatus(str, Enum):
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     MANUAL_OVERRIDE = "MANUAL_OVERRIDE"
+
+
+class UserRole(str, Enum):
+    ADMIN = "ADMIN"
+    MEMBER = "MEMBER"

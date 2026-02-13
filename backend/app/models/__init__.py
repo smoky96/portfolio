@@ -5,14 +5,16 @@ from app.models.entities import (
     AllocationNode,
     AuditLog,
     FxRate,
+    InviteCode,
     Instrument,
     InstrumentTagSelection,
     ManualPriceOverride,
     PositionSnapshot,
     Quote,
     Transaction,
+    User,
 )
-from app.models.enums import AccountType, InstrumentType, QuoteProviderStatus, TransactionType
+from app.models.enums import AccountType, InstrumentType, QuoteProviderStatus, TransactionType, UserRole
 
 __all__ = [
     "Account",
@@ -21,14 +23,17 @@ __all__ = [
     "AllocationNode",
     "AuditLog",
     "FxRate",
+    "InviteCode",
     "Instrument",
     "InstrumentTagSelection",
     "ManualPriceOverride",
     "PositionSnapshot",
     "Quote",
     "Transaction",
+    "User",
     "AccountType",
     "InstrumentType",
     "QuoteProviderStatus",
     "TransactionType",
+    "UserRole",
 ]

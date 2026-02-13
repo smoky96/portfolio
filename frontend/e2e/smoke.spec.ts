@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { authedGet, authedPatch, gotoWithLogin } from "./helpers/auth";
+
 interface DashboardSummaryFixture {
   total_assets: string;
   total_cash: string;
@@ -133,8 +135,26 @@ async function clickNav(page: Page, label: string) {
 }
 
 test.describe("Portfolio smoke @smoke", () => {
+  test("login gate works and logout returns to login page", async ({ page }) => {
+    await page.goto("/login");
+    await expect(page.locator(".login-page")).toBeVisible();
+
+    await page.locator("#login-username").fill("wrong");
+    await page.locator("#login-password").fill("wrong");
+    await page.getByRole("button", { name: "登录系统" }).click();
+    await expect(page.getByText("账号或密码错误，请重试。")).toBeVisible();
+
+    await page.locator("#login-username").fill("admin");
+    await page.locator("#login-password").fill("admin123");
+    await page.getByRole("button", { name: "登录系统" }).click();
+    await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
+
+    await page.getByRole("button", { name: /退出/ }).first().click();
+    await expect(page.locator(".login-page")).toBeVisible();
+  });
+
   test("dashboard and allocation pages render", async ({ page }) => {
-    await page.goto("/");
+    await gotoWithLogin(page, "/");
 
     await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
     await expect(page.getByText("收益率曲线")).toBeVisible();
@@ -173,13 +193,13 @@ test.describe("Portfolio smoke @smoke", () => {
   });
 
   test("seeded accounts are visible", async ({ page }) => {
-    await page.goto("/accounts");
+    await gotoWithLogin(page, "/accounts");
     await expect(page.getByText("A股券商账户")).toBeVisible();
     await expect(page.getByText("美股券商账户")).toBeVisible();
   });
 
   test("asset structure can switch to any allocation level", async ({ page, request }) => {
-    const nodesResp = await request.get("/api/v1/allocation/nodes");
+    const nodesResp = await authedGet(request, "/api/v1/allocation/nodes");
     expect(nodesResp.ok()).toBeTruthy();
     const nodes = (await nodesResp.json()) as NodeFixture[];
     expect(nodes.length).toBeGreaterThan(0);
@@ -188,7 +208,7 @@ test.describe("Portfolio smoke @smoke", () => {
     const candidateNode = nodes.find((item) => item.parent_id !== null) ?? nodes[0];
     const candidatePath = buildNodePath(candidateNode.id, nodeMap);
 
-    await page.goto("/");
+    await gotoWithLogin(page, "/");
     await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
 
     const card = page.locator(".ant-card").filter({ hasText: "资产结构" }).first();
@@ -201,7 +221,7 @@ test.describe("Portfolio smoke @smoke", () => {
   });
 
   test("asset structure root view can toggle cash slice", async ({ page }) => {
-    await page.goto("/");
+    await gotoWithLogin(page, "/");
     await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
 
     const card = page.locator(".ant-card").filter({ hasText: "资产结构" }).first();
@@ -221,10 +241,10 @@ test.describe("Portfolio smoke @smoke", () => {
 
   test("root allocation pie follows instrument mapping changes", async ({ page, request }) => {
     const [summaryResp, holdingsResp, instrumentsResp, nodesResp] = await Promise.all([
-      request.get("/api/v1/dashboard/summary"),
-      request.get("/api/v1/holdings"),
-      request.get("/api/v1/instruments"),
-      request.get("/api/v1/allocation/nodes")
+      authedGet(request, "/api/v1/dashboard/summary"),
+      authedGet(request, "/api/v1/holdings"),
+      authedGet(request, "/api/v1/instruments"),
+      authedGet(request, "/api/v1/allocation/nodes")
     ]);
     expect(summaryResp.ok()).toBeTruthy();
     expect(holdingsResp.ok()).toBeTruthy();
@@ -274,20 +294,20 @@ test.describe("Portfolio smoke @smoke", () => {
 
     const originalCategoryId = movedInstrument.allocation_node_id;
     try {
-      const patchResp = await request.patch(`/api/v1/instruments/${movedInstrument.id}`, {
+      const patchResp = await authedPatch(request, `/api/v1/instruments/${movedInstrument.id}`, {
         data: { allocation_node_id: targetCategoryId }
       });
       expect(patchResp.ok()).toBeTruthy();
 
-      await page.goto("/");
+      await gotoWithLogin(page, "/");
       await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
       const rootCard = page.locator(".ant-card").filter({ hasText: "资产结构" }).first();
       await expect(rootCard).toBeVisible();
 
       const [afterSummaryResp, afterHoldingsResp, afterInstrumentsResp] = await Promise.all([
-        request.get("/api/v1/dashboard/summary"),
-        request.get("/api/v1/holdings"),
-        request.get("/api/v1/instruments")
+        authedGet(request, "/api/v1/dashboard/summary"),
+        authedGet(request, "/api/v1/holdings"),
+        authedGet(request, "/api/v1/instruments")
       ]);
       expect(afterSummaryResp.ok()).toBeTruthy();
       expect(afterHoldingsResp.ok()).toBeTruthy();
@@ -322,7 +342,7 @@ test.describe("Portfolio smoke @smoke", () => {
         expect(actual).toBe(expected);
       }
     } finally {
-      const rollbackResp = await request.patch(`/api/v1/instruments/${movedInstrument.id}`, {
+      const rollbackResp = await authedPatch(request, `/api/v1/instruments/${movedInstrument.id}`, {
         data: { allocation_node_id: originalCategoryId }
       });
       expect(rollbackResp.ok()).toBeTruthy();
@@ -332,7 +352,7 @@ test.describe("Portfolio smoke @smoke", () => {
   test("mobile navigation drawer works @mobile", async ({ page }, testInfo) => {
     test.skip(!testInfo.project.name.includes("mobile"));
 
-    await page.goto("/");
+    await gotoWithLogin(page, "/");
     await expect(page.getByLabel("打开导航菜单")).toBeVisible();
 
     await clickNav(page, "流水");
