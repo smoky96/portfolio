@@ -1,5 +1,6 @@
 from app.models.entities import (
     Account,
+    AccountTagSelection,
     AllocationTag,
     AllocationTagGroup,
     AllocationNode,
@@ -18,6 +19,7 @@ from app.models.enums import AccountType, InstrumentType, QuoteProviderStatus, T
 
 __all__ = [
     "Account",
+    "AccountTagSelection",
     "AllocationTag",
     "AllocationTagGroup",
     "AllocationNode",

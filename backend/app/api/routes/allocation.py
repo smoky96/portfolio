@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, get_current_user
 from app.db.session import get_db
-from app.models import AllocationNode, AllocationTag, AllocationTagGroup, Instrument, InstrumentTagSelection
+from app.models import Account, AccountTagSelection, AllocationNode, AllocationTag, AllocationTagGroup, Instrument, InstrumentTagSelection
 from app.schemas import (
+    AccountTagSelectionRead,
+    AccountTagSelectionUpsert,
     AllocationTagCreate,
     AllocationTagGroupCreate,
     AllocationTagGroupRead,
@@ -55,6 +57,13 @@ def _instrument_or_404(db: Session, owner_id: int, instrument_id: int) -> Instru
     if not instrument:
         raise HTTPException(status_code=404, detail="Instrument not found")
     return instrument
+
+
+def _account_or_404(db: Session, owner_id: int, account_id: int) -> Account:
+    account = db.scalar(select(Account).where(Account.id == account_id, Account.owner_id == owner_id))
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    return account
 
 
 def _is_descendant(db: Session, owner_id: int, root_node_id: int, candidate_parent_id: int) -> bool:
@@ -336,6 +345,12 @@ def delete_node(
         .values(allocation_node_id=None)
     )
     unbound_instruments = int(unbind_result.rowcount or 0)
+    unbind_accounts_result = db.execute(
+        update(Account)
+        .where(Account.owner_id == current_user.id, Account.allocation_node_id.in_(subtree_node_ids))
+        .values(allocation_node_id=None)
+    )
+    unbound_accounts = int(unbind_accounts_result.rowcount or 0)
 
     db.execute(delete(AllocationNode).where(AllocationNode.owner_id == current_user.id, AllocationNode.id.in_(subtree_node_ids)))
     db.flush()
@@ -355,11 +370,17 @@ def delete_node(
         after_state={
             "deleted_subtree_nodes": len(subtree_node_ids),
             "unbound_instruments": unbound_instruments,
+            "unbound_accounts": unbound_accounts,
         },
     )
 
     db.commit()
-    return {"deleted": True, "deleted_nodes": len(subtree_node_ids), "unbound_instruments": unbound_instruments}
+    return {
+        "deleted": True,
+        "deleted_nodes": len(subtree_node_ids),
+        "unbound_instruments": unbound_instruments,
+        "unbound_accounts": unbound_accounts,
+    }
 
 
 @router.get("/tag-groups", response_model=list[AllocationTagGroupRead])
@@ -444,6 +465,12 @@ def delete_tag_group(
         delete(InstrumentTagSelection).where(
             InstrumentTagSelection.owner_id == current_user.id,
             InstrumentTagSelection.group_id == group_id,
+        )
+    )
+    db.execute(
+        delete(AccountTagSelection).where(
+            AccountTagSelection.owner_id == current_user.id,
+            AccountTagSelection.group_id == group_id,
         )
     )
     db.execute(delete(AllocationTag).where(AllocationTag.owner_id == current_user.id, AllocationTag.group_id == group_id))
@@ -561,6 +588,12 @@ def delete_tag(
             InstrumentTagSelection.tag_id == tag_id,
         )
     )
+    db.execute(
+        delete(AccountTagSelection).where(
+            AccountTagSelection.owner_id == current_user.id,
+            AccountTagSelection.tag_id == tag_id,
+        )
+    )
     db.delete(tag)
 
     write_audit_log(
@@ -670,6 +703,108 @@ def delete_instrument_tag_selection(
         owner_id=current_user.id,
         actor_user_id=current_user.id,
         entity="instrument_tag_selection",
+        entity_id=str(selection_id),
+        action="DELETE",
+        before_state=before,
+        after_state=None,
+    )
+
+    db.commit()
+    return {"deleted": True}
+
+
+@router.get("/account-tags", response_model=list[AccountTagSelectionRead])
+def list_account_tags(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[AccountTagSelection]:
+    return list(
+        db.scalars(
+            select(AccountTagSelection)
+            .where(AccountTagSelection.owner_id == current_user.id)
+            .order_by(
+                AccountTagSelection.account_id,
+                AccountTagSelection.group_id,
+                AccountTagSelection.id,
+            )
+        )
+    )
+
+
+@router.put("/account-tags", response_model=AccountTagSelectionRead)
+def upsert_account_tag_selection(
+    payload: AccountTagSelectionUpsert,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AccountTagSelection:
+    _account_or_404(db, current_user.id, payload.account_id)
+    _tag_group_or_404(db, current_user.id, payload.group_id)
+    tag = _tag_or_404(db, current_user.id, payload.tag_id)
+    if tag.group_id != payload.group_id:
+        raise HTTPException(status_code=400, detail="Tag does not belong to selected group")
+
+    selection = db.scalar(
+        select(AccountTagSelection).where(
+            AccountTagSelection.owner_id == current_user.id,
+            AccountTagSelection.account_id == payload.account_id,
+            AccountTagSelection.group_id == payload.group_id,
+        )
+    )
+
+    if selection is None:
+        selection = AccountTagSelection(owner_id=current_user.id, **payload.model_dump())
+        db.add(selection)
+        db.flush()
+        action = "CREATE"
+        before_state = None
+    else:
+        before_state = {"account_id": selection.account_id, "group_id": selection.group_id, "tag_id": selection.tag_id}
+        selection.tag_id = payload.tag_id
+        db.flush()
+        action = "UPDATE"
+
+    write_audit_log(
+        db,
+        owner_id=current_user.id,
+        actor_user_id=current_user.id,
+        entity="account_tag_selection",
+        entity_id=str(selection.id),
+        action=action,
+        before_state=before_state,
+        after_state={"account_id": selection.account_id, "group_id": selection.group_id, "tag_id": selection.tag_id},
+    )
+
+    db.commit()
+    db.refresh(selection)
+    return selection
+
+
+@router.delete("/account-tags/{account_id}/{group_id}")
+def delete_account_tag_selection(
+    account_id: int,
+    group_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    selection = db.scalar(
+        select(AccountTagSelection).where(
+            AccountTagSelection.owner_id == current_user.id,
+            AccountTagSelection.account_id == account_id,
+            AccountTagSelection.group_id == group_id,
+        )
+    )
+    if selection is None:
+        raise HTTPException(status_code=404, detail="Account tag selection not found")
+
+    before = {"account_id": selection.account_id, "group_id": selection.group_id, "tag_id": selection.tag_id}
+    selection_id = selection.id
+    db.delete(selection)
+
+    write_audit_log(
+        db,
+        owner_id=current_user.id,
+        actor_user_id=current_user.id,
+        entity="account_tag_selection",
         entity_id=str(selection_id),
         action="DELETE",
         before_state=before,

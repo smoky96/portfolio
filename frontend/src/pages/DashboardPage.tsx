@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
 import {
+  Account,
+  AccountTagSelection,
   AllocationTag,
   AllocationTagGroup,
   AllocationNode,
@@ -334,11 +336,11 @@ function getDirectChildUnderNode(leafNodeId: number, ancestorId: number, nodeMap
 function aggregateAssetStructureByNode(
   holdings: Holding[],
   instruments: Instrument[],
+  accounts: Account[],
+  accountBalances: DashboardSummary["account_balances"],
   nodes: AllocationNode[],
   totalAssets: number,
-  totalCash: number,
-  focusNodeId: number | null,
-  includeRootCash: boolean
+  focusNodeId: number | null
 ): {
   slices: PieSlice[];
   centerLabel: string;
@@ -347,6 +349,7 @@ function aggregateAssetStructureByNode(
 } {
   const nodeMap = new Map(nodes.map((item) => [item.id, item]));
   const instrumentMap = new Map(instruments.map((item) => [item.id, item]));
+  const accountMap = new Map(accounts.map((item) => [item.id, item]));
   const branchNodeIds = new Set(nodes.filter((item) => item.parent_id !== null).map((item) => item.parent_id as number));
   const valueMap = new Map<string, number>();
   const focusNode = focusNodeId === null ? null : nodeMap.get(focusNodeId) ?? null;
@@ -396,24 +399,67 @@ function aggregateAssetStructureByNode(
     }
   }
 
+  for (const balance of accountBalances) {
+    const value = Number(balance.base_cash_balance || 0);
+    if (!Number.isFinite(value) || value <= 0) {
+      continue;
+    }
+
+    const account = accountMap.get(balance.account_id);
+    if (!account || account.allocation_node_id === null) {
+      if (focusNode === null) {
+        addAmount("未配置账户现金", value);
+      }
+      continue;
+    }
+
+    const accountNode = nodeMap.get(account.allocation_node_id);
+    if (!accountNode) {
+      if (focusNode === null) {
+        addAmount("未配置账户现金", value);
+      }
+      continue;
+    }
+
+    if (focusNode === null) {
+      const root = getRootNode(accountNode.id, nodeMap);
+      addAmount(root?.name ?? accountNode.name, value);
+      continue;
+    }
+
+    if (focusIsLeaf) {
+      if (accountNode.id === focusNode.id) {
+        addAmount(`${account.name}·现金`, value);
+      }
+      continue;
+    }
+
+    if (accountNode.id === focusNode.id) {
+      addAmount("直属账户现金", value);
+      continue;
+    }
+
+    const directChild = getDirectChildUnderNode(accountNode.id, focusNode.id, nodeMap);
+    if (directChild) {
+      addAmount(directChild.name, value);
+    }
+  }
+
   let denominator = 0;
   let centerAmount = 0;
   let centerLabel = "总资产";
   let levelPath = "全部资产";
 
   if (focusNode === null) {
-    if (includeRootCash) {
-      addAmount("账户现金", totalCash);
-    }
     const assignedTotal = [...valueMap.values()].reduce((sum, value) => sum + value, 0);
-    const denominatorBase = includeRootCash ? totalAssets : Math.max(totalAssets - totalCash, 0);
-    const remaining = denominatorBase - assignedTotal;
+    const denominatorBase = totalAssets;
+    const remaining = totalAssets - assignedTotal;
     if (remaining > 0.0001) {
       addAmount("未归集", remaining);
     }
     denominator = denominatorBase;
     centerAmount = denominatorBase;
-    centerLabel = includeRootCash ? "总资产" : "非现金资产";
+    centerLabel = "总资产";
   } else {
     denominator = [...valueMap.values()].reduce((sum, value) => sum + value, 0);
     centerAmount = denominator;
@@ -447,14 +493,15 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [curve, setCurve] = useState<ReturnCurvePoint[]>([]);
   const [allocationNodes, setAllocationNodes] = useState<AllocationNode[]>([]);
   const [tagGroups, setTagGroups] = useState<AllocationTagGroup[]>([]);
   const [tags, setTags] = useState<AllocationTag[]>([]);
   const [instrumentTagSelections, setInstrumentTagSelections] = useState<InstrumentTagSelection[]>([]);
+  const [accountTagSelections, setAccountTagSelections] = useState<AccountTagSelection[]>([]);
   const [driftItems, setDriftItems] = useState<DriftItem[]>([]);
   const [activeAssetNodeId, setActiveAssetNodeId] = useState<number | null>(null);
-  const [showRootCashInAssetPie, setShowRootCashInAssetPie] = useState(true);
   const [activeTagGroupId, setActiveTagGroupId] = useState<number | null>(null);
   const [showUntaggedInTagPie, setShowUntaggedInTagPie] = useState(true);
   const [curveDays, setCurveDays] = useState<number>(180);
@@ -468,25 +515,29 @@ export default function DashboardPage() {
     }
     try {
       const requestTs = Date.now();
-      const [summaryResp, holdingsResp, instrumentsResp, curveResp, nodesResp, groupsResp, tagsResp, selectionsResp, driftResp] = await Promise.all([
+      const [summaryResp, holdingsResp, instrumentsResp, accountsResp, curveResp, nodesResp, groupsResp, tagsResp, instrumentSelectionsResp, accountSelectionsResp, driftResp] = await Promise.all([
         api.get<DashboardSummary>(`/dashboard/summary?ts=${requestTs}`),
         api.get<Holding[]>("/holdings"),
         api.get<Instrument[]>("/instruments"),
+        api.get<Account[]>("/accounts"),
         api.get<ReturnCurvePoint[]>(`/dashboard/returns-curve?days=${days}&ts=${requestTs}`),
         api.get<AllocationNode[]>("/allocation/nodes"),
         api.get<AllocationTagGroup[]>("/allocation/tag-groups"),
         api.get<AllocationTag[]>("/allocation/tags"),
         api.get<InstrumentTagSelection[]>("/allocation/instrument-tags"),
+        api.get<AccountTagSelection[]>("/allocation/account-tags"),
         api.get<DriftItem[]>("/rebalance/drift")
       ]);
       setSummary(summaryResp);
       setHoldings(holdingsResp);
       setInstruments(instrumentsResp);
+      setAccounts(accountsResp);
       setCurve(curveResp);
       setAllocationNodes(nodesResp);
       setTagGroups(groupsResp);
       setTags(tagsResp);
-      setInstrumentTagSelections(selectionsResp);
+      setInstrumentTagSelections(instrumentSelectionsResp);
+      setAccountTagSelections(accountSelectionsResp);
       setDriftItems(driftResp);
       setError("");
     } catch (err) {
@@ -551,13 +602,13 @@ export default function DashboardPage() {
     return aggregateAssetStructureByNode(
       holdings,
       instruments,
+      accounts,
+      summary.account_balances,
       allocationNodes,
       Number(summary.total_assets || 0),
-      Number(summary.total_cash || 0),
-      activeAssetNodeId,
-      showRootCashInAssetPie
+      activeAssetNodeId
     );
-  }, [summary, holdings, instruments, allocationNodes, activeAssetNodeId, showRootCashInAssetPie]);
+  }, [summary, holdings, instruments, accounts, allocationNodes, activeAssetNodeId]);
 
   const derived = useMemo(() => {
     if (!summary) {
@@ -582,7 +633,6 @@ export default function DashboardPage() {
     }
 
     const totalAssets = Number(summary.total_assets || 0);
-    const totalCash = Number(summary.total_cash || 0);
 
     const alertedCount = driftItems.filter((item) => item.is_alerted).length;
     const topDrifts = [...driftItems]
@@ -635,42 +685,62 @@ export default function DashboardPage() {
           .sort((a, b) => a.order_index - b.order_index || a.id - b.id)
       : [];
     const activeTagGroupTagIds = new Set(activeTagGroupTags.map((item) => item.id));
-    const selectionMap = new Map<number, number>();
+    const instrumentSelectionMap = new Map<number, number>();
+    const accountSelectionMap = new Map<number, number>();
     if (activeTagGroup) {
       instrumentTagSelections
         .filter((item) => item.group_id === activeTagGroup.id)
-        .forEach((item) => selectionMap.set(item.instrument_id, item.tag_id));
+        .forEach((item) => instrumentSelectionMap.set(item.instrument_id, item.tag_id));
+      accountTagSelections
+        .filter((item) => item.group_id === activeTagGroup.id)
+        .forEach((item) => accountSelectionMap.set(item.account_id, item.tag_id));
     }
+    const tagById = new Map(activeTagGroupTags.map((item) => [item.id, item]));
 
     const holdingsByInstrument = new Map<number, number>();
     holdings.forEach((item) => {
       const value = Number(item.market_value || 0);
       holdingsByInstrument.set(item.instrument_id, (holdingsByInstrument.get(item.instrument_id) ?? 0) + value);
     });
+    const cashByAccount = new Map<number, number>();
+    summary.account_balances.forEach((item) => {
+      const value = Number(item.base_cash_balance || 0);
+      cashByAccount.set(item.account_id, (cashByAccount.get(item.account_id) ?? 0) + value);
+    });
 
     const labelValueMap = new Map<string, number>();
     let taggedTotal = 0;
     let untaggedTotal = 0;
     if (activeTagGroup) {
-      for (const [instrumentId, value] of holdingsByInstrument.entries()) {
-        const tagId = selectionMap.get(instrumentId);
+      const addTagValue = (value: number, tagId?: number) => {
+        if (!Number.isFinite(value) || value <= 0) {
+          return;
+        }
         if (!tagId || !activeTagGroupTagIds.has(tagId)) {
           untaggedTotal += value;
           if (showUntaggedInTagPie) {
             labelValueMap.set("未标记", (labelValueMap.get("未标记") ?? 0) + value);
           }
-          continue;
+          return;
         }
-        const tag = activeTagGroupTags.find((item) => item.id === tagId);
+        const tag = tagById.get(tagId);
         if (!tag) {
           untaggedTotal += value;
           if (showUntaggedInTagPie) {
             labelValueMap.set("未标记", (labelValueMap.get("未标记") ?? 0) + value);
           }
-          continue;
+          return;
         }
         taggedTotal += value;
         labelValueMap.set(tag.name, (labelValueMap.get(tag.name) ?? 0) + value);
+      };
+
+      for (const [instrumentId, value] of holdingsByInstrument.entries()) {
+        addTagValue(value, instrumentSelectionMap.get(instrumentId));
+      }
+
+      for (const [accountId, value] of cashByAccount.entries()) {
+        addTagValue(value, accountSelectionMap.get(accountId));
       }
     }
     const tagGroupDisplayTotal = showUntaggedInTagPie ? taggedTotal + untaggedTotal : taggedTotal;
@@ -702,7 +772,7 @@ export default function DashboardPage() {
       activeTagGroupName: activeTagGroup?.name ?? "",
       tagGroupDisplayTotal
     };
-  }, [summary, holdings, curve, driftItems, activeTagGroupId, tagGroups, tags, instrumentTagSelections, showUntaggedInTagPie]);
+  }, [summary, holdings, curve, driftItems, activeTagGroupId, tagGroups, tags, instrumentTagSelections, accountTagSelections, showUntaggedInTagPie]);
 
   const curveChartOption = useMemo(() => buildCurveOption(curve), [curve]);
   const rootChartOption = useMemo(
@@ -866,11 +936,6 @@ export default function DashboardPage() {
               <ReactECharts option={rootChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-pie" />
             ) : (
               <div className="chart-empty">暂无可展示数据</div>
-            )}
-            {activeAssetNodeId === null && (
-              <Checkbox checked={showRootCashInAssetPie} onChange={(event) => setShowRootCashInAssetPie(event.target.checked)}>
-                显示账户现金
-              </Checkbox>
             )}
             <Space direction="vertical" style={{ width: "100%" }} size={8}>
               {assetStructure.slices.map((slice) => (

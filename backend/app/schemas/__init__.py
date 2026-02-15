@@ -3,6 +3,8 @@ from app.schemas.resources import (
     AdminUserUpdate,
     AccountCreate,
     AccountRead,
+    AccountTagSelectionRead,
+    AccountTagSelectionUpsert,
     AccountUpdate,
     AllocationTagCreate,
     AllocationTagGroupCreate,
@@ -45,6 +47,8 @@ from app.schemas.resources import (
 __all__ = [
     "AccountCreate",
     "AccountRead",
+    "AccountTagSelectionRead",
+    "AccountTagSelectionUpsert",
     "AccountUpdate",
     "AdminUserCreate",
     "AdminUserUpdate",

@@ -2,7 +2,7 @@ import { Alert, Button, Card, Col, Form, Input, Row, Select, Space, Table, Toolt
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
-import { AllocationTag, AllocationTagGroup, Instrument, InstrumentTagSelection } from "../types";
+import { Account, AccountTagSelection, AllocationTag, AllocationTagGroup, Instrument, InstrumentTagSelection } from "../types";
 
 interface TagGroupForm {
   name: string;
@@ -16,13 +16,16 @@ export default function TagGroupsPage() {
   const [tagGroups, setTagGroups] = useState<AllocationTagGroup[]>([]);
   const [tags, setTags] = useState<AllocationTag[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [instrumentTagSelections, setInstrumentTagSelections] = useState<InstrumentTagSelection[]>([]);
+  const [accountTagSelections, setAccountTagSelections] = useState<AccountTagSelection[]>([]);
   const [error, setError] = useState("");
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingTagAssignments, setSavingTagAssignments] = useState(false);
   const [activeTagGroupId, setActiveTagGroupId] = useState<number | null>(null);
   const [pendingTagSelections, setPendingTagSelections] = useState<Record<string, number | null>>({});
+  const [pendingAccountTagSelections, setPendingAccountTagSelections] = useState<Record<string, number | null>>({});
 
   const [tagGroupForm] = Form.useForm<TagGroupForm>();
   const [tagForm] = Form.useForm<TagForm>();
@@ -30,17 +33,22 @@ export default function TagGroupsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [groups, allTags, allInstruments, selections] = await Promise.all([
+      const [groups, allTags, allInstruments, allAccounts, selections, accountSelections] = await Promise.all([
         api.get<AllocationTagGroup[]>("/allocation/tag-groups"),
         api.get<AllocationTag[]>("/allocation/tags"),
         api.get<Instrument[]>("/instruments"),
-        api.get<InstrumentTagSelection[]>("/allocation/instrument-tags")
+        api.get<Account[]>("/accounts"),
+        api.get<InstrumentTagSelection[]>("/allocation/instrument-tags"),
+        api.get<AccountTagSelection[]>("/allocation/account-tags")
       ]);
       setTagGroups(groups);
       setTags(allTags);
       setInstruments(allInstruments);
+      setAccounts(allAccounts);
       setInstrumentTagSelections(selections);
+      setAccountTagSelections(accountSelections);
       setPendingTagSelections({});
+      setPendingAccountTagSelections({});
       setError("");
     } catch (err) {
       setError(String(err));
@@ -139,11 +147,30 @@ export default function TagGroupsPage() {
 
   function resetPendingTagSelections() {
     setPendingTagSelections({});
+    setPendingAccountTagSelections({});
+  }
+
+  function updateAccountTagDraft(accountId: number, groupId: number, tagId?: number) {
+    const key = `${accountId}-${groupId}`;
+    const originalTagId = selectionTagIdByAccountGroup.get(key) ?? null;
+    const nextTagId = typeof tagId === "number" ? tagId : null;
+
+    setPendingAccountTagSelections((prev) => {
+      if (originalTagId === nextTagId) {
+        const { [key]: _, ...rest } = prev;
+        return rest;
+      }
+      return {
+        ...prev,
+        [key]: nextTagId
+      };
+    });
   }
 
   async function saveInstrumentTagSelections() {
-    const changes = Object.entries(pendingTagSelections);
-    if (changes.length === 0) {
+    const instrumentChanges = Object.entries(pendingTagSelections);
+    const accountChanges = Object.entries(pendingAccountTagSelections);
+    if (instrumentChanges.length === 0 && accountChanges.length === 0) {
       message.info("暂无待保存的标签分配改动");
       return;
     }
@@ -151,7 +178,7 @@ export default function TagGroupsPage() {
     setSavingTagAssignments(true);
     try {
       let appliedCount = 0;
-      for (const [key, nextTagId] of changes) {
+      for (const [key, nextTagId] of instrumentChanges) {
         const [instrumentIdRaw, groupIdRaw] = key.split("-");
         const instrumentId = Number(instrumentIdRaw);
         const groupId = Number(groupIdRaw);
@@ -180,8 +207,38 @@ export default function TagGroupsPage() {
         }
       }
 
+      for (const [key, nextTagId] of accountChanges) {
+        const [accountIdRaw, groupIdRaw] = key.split("-");
+        const accountId = Number(accountIdRaw);
+        const groupId = Number(groupIdRaw);
+        if (!Number.isInteger(accountId) || !Number.isInteger(groupId)) {
+          continue;
+        }
+
+        const originalTagId = selectionTagIdByAccountGroup.get(key);
+        if ((originalTagId ?? null) === (nextTagId ?? null)) {
+          continue;
+        }
+
+        if (typeof nextTagId === "number") {
+          await api.put("/allocation/account-tags", {
+            account_id: accountId,
+            group_id: groupId,
+            tag_id: nextTagId
+          });
+          appliedCount += 1;
+          continue;
+        }
+
+        if (typeof originalTagId === "number") {
+          await api.delete(`/allocation/account-tags/${accountId}/${groupId}`);
+          appliedCount += 1;
+        }
+      }
+
       setMessageText(`标签分配已保存（${appliedCount} 项）`);
       setPendingTagSelections({});
+      setPendingAccountTagSelections({});
       await load();
     } catch (err) {
       setError(String(err));
@@ -236,11 +293,33 @@ export default function TagGroupsPage() {
     });
     return map;
   }, [selectionTagIdByInstrumentGroup, pendingTagSelections]);
-  const pendingSelectionCount = useMemo(() => Object.keys(pendingTagSelections).length, [pendingTagSelections]);
+  const selectionTagIdByAccountGroup = useMemo(() => {
+    const map = new Map<string, number>();
+    accountTagSelections.forEach((item) => {
+      map.set(`${item.account_id}-${item.group_id}`, item.tag_id);
+    });
+    return map;
+  }, [accountTagSelections]);
+  const selectionDraftByAccountGroup = useMemo(() => {
+    const map = new Map(selectionTagIdByAccountGroup);
+    Object.entries(pendingAccountTagSelections).forEach(([key, value]) => {
+      if (typeof value === "number") {
+        map.set(key, value);
+      } else {
+        map.delete(key);
+      }
+    });
+    return map;
+  }, [selectionTagIdByAccountGroup, pendingAccountTagSelections]);
+  const pendingSelectionCount = useMemo(
+    () => Object.keys(pendingTagSelections).length + Object.keys(pendingAccountTagSelections).length,
+    [pendingTagSelections, pendingAccountTagSelections]
+  );
   const instrumentRows = useMemo(
     () => [...instruments].sort((a, b) => a.symbol.localeCompare(b.symbol, "en-US", { sensitivity: "base" }) || a.id - b.id),
     [instruments]
   );
+  const accountRows = useMemo(() => [...accounts].sort((a, b) => a.name.localeCompare(b.name, "zh-Hans-CN") || a.id - b.id), [accounts]);
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack tags-page">
@@ -422,6 +501,75 @@ export default function TagGroupsPage() {
                           loading={savingTagAssignments && isDirty}
                           disabled={groupTags.length === 0 || savingTagAssignments}
                           onChange={(value) => updateInstrumentTagDraft(record.id, group.id, value)}
+                          style={{ width: "100%" }}
+                        />
+                      );
+                    }
+                  }))
+                ]}
+              />
+            </Card>
+          </Col>
+
+          <Col xs={24}>
+            <Card
+              size="small"
+              title="账户标签分配"
+              className="tags-inner-card tags-assignment-card"
+              extra={
+                <Space>
+                  <Button onClick={resetPendingTagSelections} disabled={pendingSelectionCount === 0 || savingTagAssignments}>
+                    重置改动
+                  </Button>
+                  <Button type="primary" onClick={() => void saveInstrumentTagSelections()} loading={savingTagAssignments} disabled={pendingSelectionCount === 0}>
+                    保存分配
+                  </Button>
+                </Space>
+              }
+            >
+              <Alert
+                type="info"
+                showIcon
+                message="每个账户在每个标签组下最多选择一个标签；账户标签会用于现金账户归类分析。"
+                style={{ marginBottom: 12 }}
+              />
+              <Table
+                className="tag-assignment-table"
+                rowKey="id"
+                size="small"
+                pagination={{ pageSize: 8, showSizeChanger: false }}
+                scroll={{ x: 980 }}
+                dataSource={accountRows}
+                locale={{ emptyText: "暂无账户" }}
+                columns={[
+                  {
+                    title: "账户",
+                    dataIndex: "name",
+                    width: 200
+                  },
+                  ...sortedTagGroups.map((group) => ({
+                    title: (
+                      <Tooltip title={group.name}>
+                        <span className="table-head-ellipsis">{group.name}</span>
+                      </Tooltip>
+                    ),
+                    key: `account-group-${group.id}`,
+                    width: Math.min(280, Math.max(180, group.name.length * 18 + 96)),
+                    render: (_: unknown, record: Account) => {
+                      const key = `${record.id}-${group.id}`;
+                      const groupTags = tagsByGroup.get(group.id) ?? [];
+                      const isDirty = Object.prototype.hasOwnProperty.call(pendingAccountTagSelections, key);
+                      return (
+                        <Select
+                          className={`account-tag-select account-tag-select-${record.id}-${group.id}`}
+                          allowClear
+                          placeholder={groupTags.length === 0 ? "请先创建标签" : "选择标签"}
+                          value={selectionDraftByAccountGroup.get(key)}
+                          options={groupTags.map((item) => ({ value: item.id, label: item.name }))}
+                          status={isDirty ? "warning" : undefined}
+                          loading={savingTagAssignments && isDirty}
+                          disabled={groupTags.length === 0 || savingTagAssignments}
+                          onChange={(value) => updateAccountTagDraft(record.id, group.id, value)}
                           style={{ width: "100%" }}
                         />
                       );

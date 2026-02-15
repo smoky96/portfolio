@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
 import { NODE_LEVEL_LABELS, NodeLevelLabel } from "../constants/labels";
-import { AllocationNode, Holding, Instrument } from "../types";
+import { Account, AllocationNode, DashboardSummary, Holding, Instrument } from "../types";
 import { formatDecimal, formatPercent, isHundred, sumDecimals } from "../utils/format";
 
 interface NodeForm {
@@ -57,6 +57,22 @@ interface BoundLeafHoldingInstrument {
   name: string;
   market: string;
   market_value: number;
+}
+
+interface BoundNodeAccount {
+  account_id: number;
+  name: string;
+  type: string;
+  base_currency: string;
+  base_cash_balance: number;
+}
+
+interface SelectedNodeAccountRow {
+  account_id: number;
+  name: string;
+  type: string;
+  base_currency: string;
+  base_cash_balance: number;
 }
 
 const CHART_COLORS = [
@@ -142,6 +158,8 @@ export default function AllocationPage() {
   const [nodes, setNodes] = useState<AllocationNode[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountCashBalanceById, setAccountCashBalanceById] = useState<Record<number, number>>({});
   const [error, setError] = useState("");
   const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -149,7 +167,9 @@ export default function AllocationPage() {
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [nodeWeightDrafts, setNodeWeightDrafts] = useState<Record<number, number>>({});
   const [leafInstrumentDraftId, setLeafInstrumentDraftId] = useState<number | null>(null);
+  const [nodeAccountDraftId, setNodeAccountDraftId] = useState<number | null>(null);
   const [instrumentSavingId, setInstrumentSavingId] = useState<number | null>(null);
+  const [accountSavingId, setAccountSavingId] = useState<number | null>(null);
 
   const [nodeForm] = Form.useForm<NodeForm>();
   const [nodeRenameForm] = Form.useForm<NodeRenameForm>();
@@ -157,14 +177,22 @@ export default function AllocationPage() {
   async function load() {
     setLoading(true);
     try {
-      const [n, i, h] = await Promise.all([
+      const [nodesResp, instrumentsResp, holdingsResp, accountsResp, summaryResp] = await Promise.all([
         api.get<AllocationNode[]>("/allocation/nodes"),
         api.get<Instrument[]>("/instruments"),
-        api.get<Holding[]>("/holdings")
+        api.get<Holding[]>("/holdings"),
+        api.get<Account[]>("/accounts"),
+        api.get<DashboardSummary>("/dashboard/summary")
       ]);
-      setNodes(n);
-      setInstruments(i);
-      setHoldings(h);
+      setNodes(nodesResp);
+      setInstruments(instrumentsResp);
+      setHoldings(holdingsResp);
+      setAccounts(accountsResp);
+      setAccountCashBalanceById(
+        Object.fromEntries(
+          summaryResp.account_balances.map((item) => [item.account_id, toNumber(item.base_cash_balance)])
+        )
+      );
       setError("");
     } catch (err) {
       setError(String(err));
@@ -207,7 +235,6 @@ export default function AllocationPage() {
   const selectedNode = selectedNodeId ? nodeMap.get(selectedNodeId) ?? null : null;
   const selectedNodeHasChildren = selectedNode ? (childrenMap.get(selectedNode.id)?.length ?? 0) > 0 : false;
   const selectedNodeCanBindInstruments = Boolean(selectedNode && !selectedNodeHasChildren);
-  const instrumentMap = useMemo(() => new Map(instruments.map((item) => [item.id, item])), [instruments]);
   const holdingsByInstrument = useMemo(() => {
     const map = new Map<
       number,
@@ -287,6 +314,59 @@ export default function AllocationPage() {
     return map;
   }, [instruments, holdingsByInstrument]);
 
+  const boundNodeAccounts = useMemo(() => {
+    const map = new Map<number, BoundNodeAccount[]>();
+    accounts.forEach((item) => {
+      if (item.allocation_node_id === null) {
+        return;
+      }
+      if (!map.has(item.allocation_node_id)) {
+        map.set(item.allocation_node_id, []);
+      }
+      map.get(item.allocation_node_id)!.push({
+        account_id: item.id,
+        name: item.name,
+        type: item.type,
+        base_currency: item.base_currency,
+        base_cash_balance: accountCashBalanceById[item.id] ?? 0
+      });
+    });
+    for (const list of map.values()) {
+      list.sort((a, b) => b.base_cash_balance - a.base_cash_balance || a.name.localeCompare(b.name, "zh-Hans-CN"));
+    }
+    return map;
+  }, [accounts, accountCashBalanceById]);
+
+  const selectedNodeAccountRows = useMemo(() => {
+    if (!selectedNode) {
+      return [] as SelectedNodeAccountRow[];
+    }
+    return accounts
+      .filter((item) => item.allocation_node_id === selectedNode.id)
+      .map((item) => ({
+        account_id: item.id,
+        name: item.name,
+        type: item.type,
+        base_currency: item.base_currency,
+        base_cash_balance: accountCashBalanceById[item.id] ?? 0
+      }))
+      .sort((a, b) => b.base_cash_balance - a.base_cash_balance || a.name.localeCompare(b.name, "zh-Hans-CN"));
+  }, [selectedNode, accounts, accountCashBalanceById]);
+
+  const selectableAccountOptions = useMemo(() => {
+    if (!selectedNode) {
+      return [] as Array<{ value: number; label: string; base_cash_balance: number }>;
+    }
+    return accounts
+      .filter((item) => item.allocation_node_id !== selectedNode.id)
+      .map((item) => ({
+        value: item.id,
+        label: `${item.name} · ${item.type}`,
+        base_cash_balance: accountCashBalanceById[item.id] ?? 0
+      }))
+      .sort((a, b) => b.base_cash_balance - a.base_cash_balance || a.label.localeCompare(b.label, "zh-Hans-CN"));
+  }, [selectedNode, accounts, accountCashBalanceById]);
+
   function resolveCreateParentId(mode: NodeForm["create_mode"], currentNode: AllocationNode | null): number | null {
     if (mode === "ROOT") {
       return null;
@@ -310,6 +390,7 @@ export default function AllocationPage() {
 
   useEffect(() => {
     setLeafInstrumentDraftId(null);
+    setNodeAccountDraftId(null);
   }, [selectedNodeId]);
 
   useEffect(() => {
@@ -320,6 +401,15 @@ export default function AllocationPage() {
       setLeafInstrumentDraftId(null);
     }
   }, [leafInstrumentDraftId, selectableHoldingOptions]);
+
+  useEffect(() => {
+    if (nodeAccountDraftId === null) {
+      return;
+    }
+    if (!selectableAccountOptions.some((item) => item.value === nodeAccountDraftId)) {
+      setNodeAccountDraftId(null);
+    }
+  }, [nodeAccountDraftId, selectableAccountOptions]);
 
   function getNodeLevel(node: AllocationNode): NodeLevelLabel {
     if (node.parent_id === null) {
@@ -476,6 +566,42 @@ export default function AllocationPage() {
     }
   }
 
+  async function bindAccountToNode() {
+    if (!selectedNode || nodeAccountDraftId === null) {
+      message.warning("请先选择层级并指定账户");
+      return;
+    }
+
+    setAccountSavingId(nodeAccountDraftId);
+    try {
+      await api.patch(`/accounts/${nodeAccountDraftId}`, {
+        allocation_node_id: selectedNode.id
+      });
+      setNodeAccountDraftId(null);
+      setMessageText("账户现金归属已更新");
+      await load();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setAccountSavingId(null);
+    }
+  }
+
+  async function removeAccountFromNode(accountId: number) {
+    setAccountSavingId(accountId);
+    try {
+      await api.patch(`/accounts/${accountId}`, {
+        allocation_node_id: null
+      });
+      setMessageText("账户已从当前层级移除");
+      await load();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setAccountSavingId(null);
+    }
+  }
+
   useEffect(() => {
     const nextMode: NodeForm["create_mode"] = selectedNode ? "CHILD" : "ROOT";
     const parentId = resolveCreateParentId(nextMode, selectedNode);
@@ -528,16 +654,40 @@ export default function AllocationPage() {
               }))
             : [];
 
+        const accountChildren = (boundNodeAccounts.get(node.id) ?? []).map((account) => ({
+          key: `acc-${account.account_id}`,
+          selectable: false,
+          isLeaf: true,
+          title: (
+            <div className="tree-instrument-title">
+              <div className="tree-instrument-main">
+                <Typography.Text type="secondary" className="tree-instrument-symbol">
+                  {account.name}
+                </Typography.Text>
+                <Typography.Text type="secondary" className="tree-instrument-name">
+                  {account.type}
+                </Typography.Text>
+                <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                  账户现金
+                </Tag>
+              </div>
+              <Typography.Text type="secondary" className="tree-instrument-value">
+                {formatDecimal(account.base_cash_balance)}
+              </Typography.Text>
+            </div>
+          )
+        }));
+
         return {
           key: String(node.id),
           title,
-          children: [...nodeChildren, ...holdingChildren]
+          children: [...nodeChildren, ...holdingChildren, ...accountChildren]
         };
       });
     }
 
     return build(null);
-  }, [childrenMap, nodeWeightDrafts, boundLeafHoldingInstruments]);
+  }, [childrenMap, nodeWeightDrafts, boundLeafHoldingInstruments, boundNodeAccounts]);
 
   const nodeGlobalWeightMap = useMemo(() => {
     const map = new Map<number, number>();
@@ -625,15 +775,24 @@ export default function AllocationPage() {
 
     if (selectedNodeCanBindInstruments) {
       const rows = selectedLeafInstrumentRows.filter((item) => item.market_value > 0.0001);
+      const accountRows = selectedNodeAccountRows.filter((item) => item.base_cash_balance > 0.0001);
       const totalMarketValue = rows.reduce((sum, item) => sum + item.market_value, 0);
-      if (totalMarketValue <= 0) {
+      const totalCashValue = accountRows.reduce((sum, item) => sum + item.base_cash_balance, 0);
+      const totalValue = totalMarketValue + totalCashValue;
+      if (totalValue <= 0) {
         return [] as TargetSlice[];
       }
-      return rows.map((item, index) => ({
+      const instrumentSlices = rows.map((item, index) => ({
         label: item.symbol,
-        weight: (item.market_value / totalMarketValue) * 100,
+        weight: (item.market_value / totalValue) * 100,
         color: CHART_COLORS[index % CHART_COLORS.length]
       }));
+      const accountSlices = accountRows.map((item, index) => ({
+        label: `${item.name}·现金`,
+        weight: (item.base_cash_balance / totalValue) * 100,
+        color: CHART_COLORS[(rows.length + index) % CHART_COLORS.length]
+      }));
+      return [...instrumentSlices, ...accountSlices];
     }
 
     const children = childrenMap.get(selectedNode.id) ?? [];
@@ -655,7 +814,7 @@ export default function AllocationPage() {
     }
 
     return slices;
-  }, [selectedNode, selectedNodeCanBindInstruments, childrenMap, selectedLeafInstrumentRows]);
+  }, [selectedNode, selectedNodeCanBindInstruments, childrenMap, selectedLeafInstrumentRows, selectedNodeAccountRows]);
 
   const rootChartOption = useMemo(() => buildTargetPieOption(targetRootSlices), [targetRootSlices]);
   const leafChartOption = useMemo(() => buildTargetPieOption(targetLeafSlices), [targetLeafSlices]);
@@ -899,6 +1058,64 @@ export default function AllocationPage() {
                     />
                   </div>
                 )}
+
+                <div className="allocation-editor-group">
+                  <Typography.Title level={5} style={{ margin: 0 }}>
+                    账户现金归属配置
+                  </Typography.Title>
+                  <Typography.Text type="secondary">
+                    可将账户现金归入当前层级，用于仪表盘“资产结构”按你配置的层级展示现金归属。
+                  </Typography.Text>
+                  <Space.Compact className="allocation-instrument-bind" style={{ width: "100%" }}>
+                    <Select
+                      value={nodeAccountDraftId}
+                      placeholder="选择账户"
+                      style={{ flex: 1 }}
+                      showSearch
+                      allowClear
+                      optionFilterProp="label"
+                      options={selectableAccountOptions}
+                      onChange={(value) => setNodeAccountDraftId(value ?? null)}
+                    />
+                    <Button type="primary" onClick={() => void bindAccountToNode()} loading={accountSavingId !== null} disabled={nodeAccountDraftId === null}>
+                      添加账户
+                    </Button>
+                  </Space.Compact>
+                  <Table<SelectedNodeAccountRow>
+                    rowKey="account_id"
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 580 }}
+                    dataSource={selectedNodeAccountRows}
+                    locale={{ emptyText: "当前节点暂无账户" }}
+                    columns={[
+                      { title: "账户名称", dataIndex: "name" },
+                      { title: "账户类型", dataIndex: "type", width: 110 },
+                      { title: "币种", dataIndex: "base_currency", width: 90 },
+                      {
+                        title: "当前现金",
+                        dataIndex: "base_cash_balance",
+                        align: "right",
+                        render: (value: number) => formatDecimal(value)
+                      },
+                      {
+                        title: "操作",
+                        key: "actions",
+                        width: 90,
+                        render: (_: unknown, record: SelectedNodeAccountRow) => (
+                          <Button
+                            type="link"
+                            danger
+                            onClick={() => void removeAccountFromNode(record.account_id)}
+                            loading={accountSavingId === record.account_id}
+                          >
+                            移除
+                          </Button>
+                        )
+                      }
+                    ]}
+                  />
+                </div>
 
                 <div className="allocation-editor-group">
                   <div className="allocation-editor-title-row">

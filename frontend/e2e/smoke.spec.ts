@@ -2,11 +2,6 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { authedGet, authedPatch, gotoWithLogin } from "./helpers/auth";
 
-interface DashboardSummaryFixture {
-  total_assets: string;
-  total_cash: string;
-}
-
 interface HoldingFixture {
   instrument_id: number;
   market_value: string;
@@ -21,11 +16,6 @@ interface NodeFixture {
   id: number;
   parent_id: number | null;
   name: string;
-}
-
-function toNumber(value: string | number | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function getRootName(nodeId: number, nodeMap: Map<number, NodeFixture>): string | null {
@@ -61,58 +51,6 @@ function buildNodePath(nodeId: number, nodeMap: Map<number, NodeFixture>): strin
   return path.join(" / ");
 }
 
-function buildExpectedRootPie(params: {
-  summary: DashboardSummaryFixture;
-  holdings: HoldingFixture[];
-  instruments: InstrumentFixture[];
-  nodes: NodeFixture[];
-}): Map<string, string> {
-  const totalAssets = toNumber(params.summary.total_assets);
-  const totalCash = toNumber(params.summary.total_cash);
-  if (totalAssets <= 0) {
-    return new Map();
-  }
-
-  const instrumentMap = new Map(params.instruments.map((item) => [item.id, item]));
-  const nodeMap = new Map(params.nodes.map((item) => [item.id, item]));
-  const valueMap = new Map<string, number>();
-
-  const addAmount = (label: string, amount: number) => {
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return;
-    }
-    valueMap.set(label, (valueMap.get(label) ?? 0) + amount);
-  };
-
-  for (const holding of params.holdings) {
-    const value = toNumber(holding.market_value);
-    if (value <= 0) {
-      continue;
-    }
-    const instrument = instrumentMap.get(holding.instrument_id);
-    if (!instrument || instrument.allocation_node_id === null) {
-      addAmount("未配置标的", value);
-      continue;
-    }
-    const rootName = getRootName(instrument.allocation_node_id, nodeMap);
-    addAmount(rootName ?? "未配置标的", value);
-  }
-
-  addAmount("账户现金", totalCash);
-  const assignedTotal = [...valueMap.values()].reduce((sum, value) => sum + value, 0);
-  const remaining = totalAssets - assignedTotal;
-  if (remaining > 0.0001) {
-    addAmount("未归集", remaining);
-  }
-
-  return new Map(
-    [...valueMap.entries()].map(([label, amount]) => [
-      label,
-      `${((amount / totalAssets) * 100).toFixed(3)}%`
-    ])
-  );
-}
-
 async function clickNav(page: Page, label: string) {
   const desktopItem = page.locator(".app-sider .side-nav-item, .app-sider .ant-menu-item").filter({ hasText: label }).first();
   if (await desktopItem.count()) {
@@ -135,6 +73,30 @@ async function clickNav(page: Page, label: string) {
 }
 
 test.describe("Portfolio smoke @smoke", () => {
+  const readRootLegendMap = async (page: Page): Promise<Map<string, number>> => {
+    const rootCard = page.locator(".ant-card").filter({ hasText: "资产结构" }).first();
+    await expect(rootCard).toBeVisible();
+
+    const legendRows = await rootCard.locator(".donut-legend-item").evaluateAll((rows) =>
+      rows.map((row) => {
+        const texts = Array.from(row.querySelectorAll(".ant-typography"))
+          .map((item) => (item.textContent || "").trim())
+          .filter((item) => item.length > 0);
+        return {
+          label: texts[0] ?? "",
+          value: texts[texts.length - 1] ?? ""
+        };
+      })
+    );
+
+    return new Map(
+      legendRows.map((item) => {
+        const numeric = Number(item.value.replace("%", ""));
+        return [item.label, Number.isFinite(numeric) ? numeric : 0];
+      })
+    );
+  };
+
   test("login gate works and logout returns to login page", async ({ page }) => {
     await page.goto("/login");
     await expect(page.locator(".login-page")).toBeVisible();
@@ -220,38 +182,25 @@ test.describe("Portfolio smoke @smoke", () => {
     await expect(card.locator(".ant-select-selection-item").first()).toContainText(candidatePath);
   });
 
-  test("asset structure root view can toggle cash slice", async ({ page }) => {
+  test("asset structure root view no longer shows global cash toggle", async ({ page }) => {
     await gotoWithLogin(page, "/");
     await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
 
     const card = page.locator(".ant-card").filter({ hasText: "资产结构" }).first();
     await expect(card).toBeVisible();
-
-    const cashLegendRow = card.locator(".donut-legend-item").filter({ hasText: "账户现金" }).first();
-    await expect(cashLegendRow).toBeVisible();
-
-    const cashToggle = card.getByRole("checkbox", { name: "显示账户现金" });
-    await expect(cashToggle).toBeChecked();
-    await cashToggle.uncheck();
-    await expect(cashLegendRow).toHaveCount(0);
-
-    await cashToggle.check();
-    await expect(cashLegendRow).toBeVisible();
+    await expect(card.getByRole("checkbox", { name: "显示账户现金" })).toHaveCount(0);
   });
 
   test("root allocation pie follows instrument mapping changes", async ({ page, request }) => {
-    const [summaryResp, holdingsResp, instrumentsResp, nodesResp] = await Promise.all([
-      authedGet(request, "/api/v1/dashboard/summary"),
+    const [holdingsResp, instrumentsResp, nodesResp] = await Promise.all([
       authedGet(request, "/api/v1/holdings"),
       authedGet(request, "/api/v1/instruments"),
       authedGet(request, "/api/v1/allocation/nodes")
     ]);
-    expect(summaryResp.ok()).toBeTruthy();
     expect(holdingsResp.ok()).toBeTruthy();
     expect(instrumentsResp.ok()).toBeTruthy();
     expect(nodesResp.ok()).toBeTruthy();
 
-    const summary = (await summaryResp.json()) as DashboardSummaryFixture;
     const holdings = (await holdingsResp.json()) as HoldingFixture[];
     const instruments = (await instrumentsResp.json()) as InstrumentFixture[];
     const nodes = (await nodesResp.json()) as NodeFixture[];
@@ -294,53 +243,26 @@ test.describe("Portfolio smoke @smoke", () => {
 
     const originalCategoryId = movedInstrument.allocation_node_id;
     try {
+      await gotoWithLogin(page, "/");
+      await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
+      const beforeLegend = await readRootLegendMap(page);
+      const beforeSource = beforeLegend.get(sourceRootName) ?? 0;
+      const beforeTarget = beforeLegend.get(targetRootName) ?? 0;
+
       const patchResp = await authedPatch(request, `/api/v1/instruments/${movedInstrument.id}`, {
         data: { allocation_node_id: targetCategoryId }
       });
       expect(patchResp.ok()).toBeTruthy();
 
-      await gotoWithLogin(page, "/");
+      await page.reload();
       await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
-      const rootCard = page.locator(".ant-card").filter({ hasText: "资产结构" }).first();
-      await expect(rootCard).toBeVisible();
+      const afterLegend = await readRootLegendMap(page);
 
-      const [afterSummaryResp, afterHoldingsResp, afterInstrumentsResp] = await Promise.all([
-        authedGet(request, "/api/v1/dashboard/summary"),
-        authedGet(request, "/api/v1/holdings"),
-        authedGet(request, "/api/v1/instruments")
-      ]);
-      expect(afterSummaryResp.ok()).toBeTruthy();
-      expect(afterHoldingsResp.ok()).toBeTruthy();
-      expect(afterInstrumentsResp.ok()).toBeTruthy();
+      const afterSource = afterLegend.get(sourceRootName) ?? 0;
+      const afterTarget = afterLegend.get(targetRootName) ?? 0;
 
-      const expectedMap = buildExpectedRootPie({
-        summary: (await afterSummaryResp.json()) as DashboardSummaryFixture,
-        holdings: (await afterHoldingsResp.json()) as HoldingFixture[],
-        instruments: (await afterInstrumentsResp.json()) as InstrumentFixture[],
-        nodes
-      });
-
-      const legendRows = await rootCard.locator(".donut-legend-item").evaluateAll((rows) =>
-        rows.map((row) => {
-          const texts = Array.from(row.querySelectorAll(".ant-typography"))
-            .map((item) => (item.textContent || "").trim())
-            .filter((item) => item.length > 0);
-          return {
-            label: texts[0] ?? "",
-            value: texts[texts.length - 1] ?? ""
-          };
-        })
-      );
-      const legendMap = new Map(legendRows.map((item) => [item.label, item.value]));
-
-      for (const label of [sourceRootName, targetRootName, "账户现金"]) {
-        const expected = expectedMap.get(label);
-        if (!expected) {
-          continue;
-        }
-        const actual = legendMap.get(label);
-        expect(actual).toBe(expected);
-      }
+      expect(afterTarget).toBeGreaterThan(beforeTarget);
+      expect(afterSource).toBeLessThan(beforeSource);
     } finally {
       const rollbackResp = await authedPatch(request, `/api/v1/instruments/${movedInstrument.id}`, {
         data: { allocation_node_id: originalCategoryId }

@@ -34,6 +34,7 @@ class Account(Base):
     type: Mapped[AccountType] = mapped_column(Enum(AccountType, name="account_type"), nullable=False)
     base_currency: Mapped[str] = mapped_column(String(8), nullable=False, default="CNY")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    allocation_node_id: Mapped[int | None] = mapped_column(ForeignKey("allocation_nodes.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -104,6 +105,21 @@ class InstrumentTagSelection(Base):
 
     __table_args__ = (
         UniqueConstraint("owner_id", "instrument_id", "group_id", name="uq_instrument_owner_group_tag_selection"),
+    )
+
+
+class AccountTagSelection(Base):
+    __tablename__ = "account_tag_selections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("allocation_tag_groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    tag_id: Mapped[int] = mapped_column(ForeignKey("allocation_tags.id", ondelete="CASCADE"), nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("owner_id", "account_id", "group_id", name="uq_account_owner_group_tag_selection"),
     )
 
 

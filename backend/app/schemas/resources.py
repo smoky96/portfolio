@@ -85,6 +85,7 @@ class AccountBase(BaseModel):
     type: AccountType
     base_currency: str = Field(min_length=3, max_length=8, default="CNY")
     is_active: bool = True
+    allocation_node_id: int | None = None
 
 
 class AccountCreate(AccountBase):
@@ -96,6 +97,7 @@ class AccountUpdate(BaseModel):
     type: AccountType | None = None
     base_currency: str | None = Field(default=None, min_length=3, max_length=8)
     is_active: bool | None = None
+    allocation_node_id: int | None = None
 
 
 class AccountRead(AccountBase):
@@ -197,6 +199,22 @@ class InstrumentTagSelectionUpsert(BaseModel):
 class InstrumentTagSelectionRead(BaseModel):
     id: int
     instrument_id: int
+    group_id: int
+    tag_id: int
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AccountTagSelectionUpsert(BaseModel):
+    account_id: int
+    group_id: int
+    tag_id: int
+
+
+class AccountTagSelectionRead(BaseModel):
+    id: int
+    account_id: int
     group_id: int
     tag_id: int
     updated_at: datetime

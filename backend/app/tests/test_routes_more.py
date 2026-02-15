@@ -119,6 +119,33 @@ def test_allocation_node_create_auto_moves_instruments_and_delete_cascades(clien
     assert unbound["allocation_node_id"] is None
 
 
+def test_allocation_node_delete_unbinds_accounts(client):
+    root_id = _create_root_node(client, name="账户解绑根节点")
+
+    account_resp = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "账户解绑测试",
+            "type": "CASH",
+            "base_currency": "CNY",
+            "is_active": True,
+            "allocation_node_id": root_id,
+        },
+    )
+    assert account_resp.status_code == 200
+    account_id = account_resp.json()["id"]
+    assert account_resp.json()["allocation_node_id"] == root_id
+
+    delete_resp = client.delete(f"/api/v1/allocation/nodes/{root_id}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["deleted"] is True
+
+    accounts_resp = client.get("/api/v1/accounts")
+    assert accounts_resp.status_code == 200
+    account = next(item for item in accounts_resp.json() if item["id"] == account_id)
+    assert account["allocation_node_id"] is None
+
+
 def test_allocation_update_branches(client, db_session: Session):
     root = AllocationNode(owner_id=1, parent_id=None, name="Root", target_weight=Decimal("100"), order_index=0)
     db_session.add(root)
@@ -294,6 +321,37 @@ def test_instrument_routes_and_reference_validation(client):
     resp = client.get("/api/v1/instruments")
     assert resp.status_code == 200
     assert len(resp.json()) == 1
+
+
+def test_account_routes_and_reference_validation(client):
+    account_resp = client.post(
+        "/api/v1/accounts",
+        json={
+            "name": "账户映射测试",
+            "type": "CASH",
+            "base_currency": "CNY",
+            "is_active": True,
+        },
+    )
+    assert account_resp.status_code == 200
+    account_id = account_resp.json()["id"]
+
+    # invalid allocation node should be rejected.
+    resp = client.patch(f"/api/v1/accounts/{account_id}", json={"allocation_node_id": 9999})
+    assert resp.status_code == 404
+
+    root_id = _create_root_node(client, name="账户映射根节点")
+    child_resp = client.post(
+        "/api/v1/allocation/nodes",
+        json={"parent_id": root_id, "name": "账户映射子节点", "target_weight": "100", "order_index": 0},
+    )
+    assert child_resp.status_code == 200
+    leaf_id = child_resp.json()["id"]
+
+    # valid allocation node should be persisted.
+    resp = client.patch(f"/api/v1/accounts/{account_id}", json={"allocation_node_id": leaf_id})
+    assert resp.status_code == 200
+    assert resp.json()["allocation_node_id"] == leaf_id
 
 
 def test_transactions_update_delete_and_reverse(client):
@@ -961,6 +1019,40 @@ def test_allocation_tag_group_tag_and_instrument_tag_selection_routes(client):
         json={"instrument_id": instrument_id, "group_id": style_group_id, "tag_id": medium_risk_tag_id},
     )
     assert mismatch_resp.status_code == 400
+
+    # Account tags can be managed with the same group/tag set.
+    upsert_account_style_resp = client.put(
+        "/api/v1/allocation/account-tags",
+        json={"account_id": account_id, "group_id": style_group_id, "tag_id": growth_tag_id},
+    )
+    assert upsert_account_style_resp.status_code == 200
+    assert upsert_account_style_resp.json()["tag_id"] == growth_tag_id
+
+    # Same group upsert should update existing account selection.
+    upsert_account_style_resp = client.put(
+        "/api/v1/allocation/account-tags",
+        json={"account_id": account_id, "group_id": style_group_id, "tag_id": value_tag_id},
+    )
+    assert upsert_account_style_resp.status_code == 200
+    assert upsert_account_style_resp.json()["tag_id"] == value_tag_id
+
+    account_selection_list_resp = client.get("/api/v1/allocation/account-tags")
+    assert account_selection_list_resp.status_code == 200
+    account_selections = account_selection_list_resp.json()
+    assert len(account_selections) == 1
+    assert account_selections[0]["account_id"] == account_id
+    assert account_selections[0]["group_id"] == style_group_id
+    assert account_selections[0]["tag_id"] == value_tag_id
+
+    # Tag/group mismatch should be rejected for account selections too.
+    account_mismatch_resp = client.put(
+        "/api/v1/allocation/account-tags",
+        json={"account_id": account_id, "group_id": style_group_id, "tag_id": medium_risk_tag_id},
+    )
+    assert account_mismatch_resp.status_code == 400
+
+    delete_account_selection_resp = client.delete(f"/api/v1/allocation/account-tags/{account_id}/{style_group_id}")
+    assert delete_account_selection_resp.status_code == 200
 
     delete_selection_resp = client.delete(f"/api/v1/allocation/instrument-tags/{instrument_id}/{style_group_id}")
     assert delete_selection_resp.status_code == 200

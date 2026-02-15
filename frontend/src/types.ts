@@ -7,6 +7,7 @@ export interface Account {
   type: AccountType;
   base_currency: string;
   is_active: boolean;
+  allocation_node_id: number | null;
 }
 
 export interface AllocationNode {
@@ -37,6 +38,14 @@ export interface AllocationTag {
 export interface InstrumentTagSelection {
   id: number;
   instrument_id: number;
+  group_id: number;
+  tag_id: number;
+  updated_at: string;
+}
+
+export interface AccountTagSelection {
+  id: number;
+  account_id: number;
   group_id: number;
   tag_id: number;
   updated_at: string;
