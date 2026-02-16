@@ -2,27 +2,48 @@ import { expect, type APIRequestContext, type APIResponse, type Page } from "@pl
 
 const APP_USER = process.env.PLAYWRIGHT_APP_USER ?? "admin";
 const APP_PASS = process.env.PLAYWRIGHT_APP_PASS ?? "admin123";
-let cachedAccessToken: string | null = null;
+const LOGIN_RETRY_DELAYS_MS = [0, 1000, 3000, 6000, 12000];
+const requestAuthState = new WeakMap<APIRequestContext, boolean>();
 
-interface LoginResponse {
-  access_token: string;
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
-async function getAccessToken(request: APIRequestContext): Promise<string> {
-  if (cachedAccessToken) {
-    return cachedAccessToken;
+async function ensureAuthenticated(request: APIRequestContext): Promise<void> {
+  if (requestAuthState.get(request)) {
+    return;
   }
 
-  const response = await request.post("/api/v1/auth/login", {
-    data: {
-      username: APP_USER,
-      password: APP_PASS
+  let lastStatus: number | null = null;
+  let lastBody = "";
+
+  for (const delay of LOGIN_RETRY_DELAYS_MS) {
+    if (delay > 0) {
+      await sleep(delay);
     }
-  });
-  expect(response.ok()).toBeTruthy();
-  const payload = (await response.json()) as LoginResponse;
-  cachedAccessToken = payload.access_token;
-  return cachedAccessToken;
+
+    const response = await request.post("/api/v1/auth/login", {
+      data: {
+        username: APP_USER,
+        password: APP_PASS
+      }
+    });
+    if (response.ok()) {
+      requestAuthState.set(request, true);
+      return;
+    }
+
+    lastStatus = response.status();
+    lastBody = (await response.text()).slice(0, 200);
+
+    if (lastStatus !== 429 && lastStatus < 500) {
+      break;
+    }
+  }
+
+  throw new Error(`E2E API login failed with status ${lastStatus ?? "unknown"}: ${lastBody}`);
 }
 
 async function authedFetch(
@@ -30,28 +51,22 @@ async function authedFetch(
   url: string,
   init: Omit<Parameters<APIRequestContext["fetch"]>[1], "method"> & { method: string }
 ): Promise<APIResponse> {
-  const token = await getAccessToken(request);
-  const response = await request.fetch(url, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  let lastResponse: APIResponse | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await ensureAuthenticated(request);
+    const response = await request.fetch(url, init);
+    lastResponse = response;
 
-  if (response.status() !== 401) {
-    return response;
+    if (response.status() !== 401 && response.status() !== 429) {
+      return response;
+    }
+
+    requestAuthState.set(request, false);
+    await sleep((attempt + 1) * 1000);
   }
 
-  cachedAccessToken = null;
-  const refreshedToken = await getAccessToken(request);
-  return request.fetch(url, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      Authorization: `Bearer ${refreshedToken}`,
-    },
-  });
+  expect(lastResponse).not.toBeNull();
+  return lastResponse as APIResponse;
 }
 
 export async function authedGet(
@@ -95,10 +110,34 @@ export async function loginIfNeeded(page: Page) {
     return;
   }
 
-  await usernameInput.fill(APP_USER);
-  await page.locator("#login-password").first().fill(APP_PASS);
-  await page.getByRole("button", { name: "登录系统", exact: true }).click();
-  await expect(page.locator("#login-username")).toHaveCount(0, { timeout: 10000 });
+  let lastStatus: number | null = null;
+  for (const delay of LOGIN_RETRY_DELAYS_MS) {
+    if (delay > 0) {
+      await page.waitForTimeout(delay);
+    }
+
+    await usernameInput.fill(APP_USER);
+    await page.locator("#login-password").first().fill(APP_PASS);
+
+    const loginResponsePromise = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/auth/login") && response.request().method() === "POST",
+      { timeout: 15000 }
+    );
+    await page.getByRole("button", { name: /登录系统/ }).first().click();
+    const loginResponse = await loginResponsePromise;
+    lastStatus = loginResponse.status();
+
+    if (loginResponse.ok()) {
+      await expect(page.locator("#login-username")).toHaveCount(0, { timeout: 15000 });
+      return;
+    }
+
+    if (lastStatus !== 429 && lastStatus < 500) {
+      break;
+    }
+  }
+
+  throw new Error(`E2E UI login failed with status ${lastStatus ?? "unknown"}`);
 }
 
 export async function gotoWithLogin(page: Page, path: string) {

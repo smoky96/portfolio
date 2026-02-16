@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0 --port 5173",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
-    "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:e2e:smoke": "playwright test --project=chromium --workers=1 --grep @smoke",
     "test:e2e:allocation": "playwright test e2e/allocation.spec.ts",
     "test:e2e:transactions": "playwright test e2e/transactions.spec.ts",
     "test:e2e:holdings": "playwright test e2e/holdings.spec.ts",

@@ -33,6 +33,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Ruff Lint
+        run: |
+          pip install ruff
+          ruff check app --select E9,F63,F7,F82
+
+      - name: Dependency Audit
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt
+
       - name: Run Pytest With Coverage Gate
         env:
           PYTHONPATH: .

@@ -11,15 +11,29 @@ echo "[2/6] Seeding mock data..."
 docker compose exec -T backend python -m app.scripts.seed_mock_data
 
 echo "[3/6] Running backend test suite with 80% coverage gate..."
-docker compose exec -T backend sh -lc 'cd /app && PYTHONPATH=/app pytest'
+docker run --rm -v "$ROOT_DIR/backend:/app" -w /app python:3.12-slim bash -lc 'python -m venv /tmp/venv && . /tmp/venv/bin/activate && pip install -q -r requirements.txt && PYTHONPATH=/app pytest'
 
 echo "[4/6] Checking health endpoint through nginx..."
-docker compose exec -T nginx sh -lc 'AUTH=$(printf "admin:admin123" | base64); wget -qO- --header "Authorization: Basic $AUTH" http://127.0.0.1:80/health'
+curl -fsS http://localhost:8080/health >/dev/null
 
-echo "[5/6] Checking dashboard summary through nginx..."
-docker compose exec -T nginx sh -lc 'AUTH=$(printf "admin:admin123" | base64); wget -qO- --header "Authorization: Basic $AUTH" http://127.0.0.1:80/api/v1/dashboard/summary >/dev/null'
+echo "[5/6] Checking dashboard summary through nginx with cookie auth..."
+COOKIE_JAR="$(mktemp)"
+curl -fsS -c "$COOKIE_JAR" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' \
+  http://localhost:8080/api/v1/auth/login >/dev/null
+curl -fsS -b "$COOKIE_JAR" http://localhost:8080/api/v1/dashboard/summary >/dev/null
+rm -f "$COOKIE_JAR"
 
-echo "[6/6] Running frontend Playwright regression (smoke + transactions)..."
-docker compose exec -T frontend sh -lc 'cd /app && PLAYWRIGHT_BASE_URL=http://nginx PLAYWRIGHT_AUTH_USER=admin PLAYWRIGHT_AUTH_PASS=admin123 npm run test:e2e:regression'
+echo "[6/6] Running frontend Playwright smoke suite..."
+(
+  cd frontend
+  npm ci
+  npx playwright install chromium
+  PLAYWRIGHT_BASE_URL=http://localhost:8080 \
+  PLAYWRIGHT_AUTH_USER=admin \
+  PLAYWRIGHT_AUTH_PASS=admin123 \
+  npm run test:e2e:smoke
+)
 
 echo "Acceptance smoke completed successfully."

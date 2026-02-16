@@ -33,6 +33,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        VITE_ALLOW_SELF_REGISTRATION: ${VITE_ALLOW_SELF_REGISTRATION:-true}
     restart: unless-stopped
     environment:
       VITE_API_BASE: /api/v1

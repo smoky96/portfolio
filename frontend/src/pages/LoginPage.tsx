@@ -14,6 +14,7 @@ interface LoginFormValues {
 
 interface LoginPageProps {
   onLogin: (session: AuthSession) => void;
+  allowSelfRegistration: boolean;
 }
 
 function resolveRedirectPath(raw: unknown) {
@@ -26,7 +27,7 @@ function resolveRedirectPath(raw: unknown) {
   return raw;
 }
 
-export default function LoginPage({ onLogin }: LoginPageProps) {
+export default function LoginPage({ onLogin, allowSelfRegistration }: LoginPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [form] = Form.useForm<LoginFormValues>();
@@ -97,11 +98,13 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           </Space>
         </Form>
 
-        <div style={{ marginTop: 12, textAlign: "center" }}>
-          <Typography.Text type="secondary">
-            没有账号？<Link to="/register">使用邀请码注册</Link>
-          </Typography.Text>
-        </div>
+        {allowSelfRegistration && (
+          <div style={{ marginTop: 12, textAlign: "center" }}>
+            <Typography.Text type="secondary">
+              没有账号？<Link to="/register">使用邀请码注册</Link>
+            </Typography.Text>
+          </div>
+        )}
       </Card>
     </div>
   );

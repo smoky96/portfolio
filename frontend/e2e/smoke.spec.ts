@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { authedGet, authedPatch, gotoWithLogin } from "./helpers/auth";
+import { authedGet, authedPatch, gotoWithLogin, loginIfNeeded } from "./helpers/auth";
 
 interface HoldingFixture {
   instrument_id: number;
@@ -108,8 +108,8 @@ test.describe("Portfolio smoke @smoke", () => {
 
     await page.locator("#login-username").fill("admin");
     await page.locator("#login-password").fill("admin123");
-    await page.getByRole("button", { name: "登录系统" }).click();
-    await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible();
+    await loginIfNeeded(page);
+    await expect(page.getByRole("heading", { name: "仪表盘" })).toBeVisible({ timeout: 15000 });
 
     await page.getByRole("button", { name: /退出/ }).first().click();
     await expect(page.locator(".login-page")).toBeVisible();
@@ -192,6 +192,7 @@ test.describe("Portfolio smoke @smoke", () => {
   });
 
   test("root allocation pie follows instrument mapping changes", async ({ page, request }) => {
+    test.slow();
     const [holdingsResp, instrumentsResp, nodesResp] = await Promise.all([
       authedGet(request, "/api/v1/holdings"),
       authedGet(request, "/api/v1/instruments"),

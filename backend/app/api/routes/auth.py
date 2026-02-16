@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, get_current_user
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import User, UserRole
 from app.schemas import AuthTokenRead, LoginRequest, RegisterRequest, UserRead
@@ -18,10 +21,35 @@ from app.services.auth import (
 )
 
 router = APIRouter()
+register_router = APIRouter()
+settings = get_settings()
+
+
+def _set_auth_cookie(response: Response, *, token: str, expires_at: datetime) -> None:
+    max_age_seconds = max(0, int((expires_at - datetime.now(timezone.utc)).total_seconds()))
+    response.set_cookie(
+        key=settings.cookie_name,
+        value=token,
+        max_age=max_age_seconds,
+        expires=expires_at,
+        path="/",
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite=settings.cookie_samesite,
+        domain=settings.cookie_domain,
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.cookie_name,
+        path="/",
+        domain=settings.cookie_domain,
+    )
 
 
 @router.post("/login", response_model=AuthTokenRead)
-def login(payload: LoginRequest, db: Session = Depends(get_db)) -> dict:
+def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> dict:
     user = authenticate_user(db, payload.username, payload.password)
     token, expires_at = issue_user_token(user)
     mark_user_login(user)
@@ -39,15 +67,21 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> dict:
 
     db.commit()
     db.refresh(user)
+    _set_auth_cookie(response, token=token, expires_at=expires_at)
     return {
-        "access_token": token,
-        "token_type": "bearer",
         "expires_at": expires_at,
         "user": user,
     }
 
 
-@router.post("/register", response_model=UserRead)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(response: Response) -> Response:
+    _clear_auth_cookie(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+    return response
+
+
+@register_router.post("/register", response_model=UserRead)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> UserRead:
     invite = validate_invite_code_for_registration(db, payload.invite_code)
     user = create_user(

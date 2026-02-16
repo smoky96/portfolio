@@ -41,10 +41,11 @@ def raw_client(db_session: Session):
         yield client
 
 
-def _login_token(client: TestClient, username: str, password: str) -> str:
+def _login(client: TestClient, username: str, password: str) -> dict:
     response = client.post("/api/v1/auth/login", json={"username": username, "password": password})
     assert response.status_code == 200
-    return response.json()["access_token"]
+    assert "set-cookie" in response.headers
+    return response.json()
 
 
 def test_security_helpers_and_auth_service(db_session: Session):
@@ -185,6 +186,15 @@ def test_auth_routes_and_dependency_guards(raw_client: TestClient, db_session: S
     db_session.add(invite)
     db_session.commit()
 
+    missing_auth_response = raw_client.get("/api/v1/accounts")
+    assert missing_auth_response.status_code == 401
+
+    invalid_auth_response = raw_client.get(
+        "/api/v1/accounts",
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+    assert invalid_auth_response.status_code == 401
+
     register_response = raw_client.post(
         "/api/v1/auth/register",
         json={
@@ -200,25 +210,17 @@ def test_auth_routes_and_dependency_guards(raw_client: TestClient, db_session: S
         json={"username": "member-1", "password": "member-pass-123"},
     )
     assert login_response.status_code == 200
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    payload = login_response.json()
+    assert payload["user"]["username"] == "member-1"
+    assert payload["expires_at"]
+    assert "set-cookie" in login_response.headers
 
-    me_response = raw_client.get("/api/v1/auth/me", headers=headers)
+    me_response = raw_client.get("/api/v1/auth/me")
     assert me_response.status_code == 200
     assert me_response.json()["username"] == "member-1"
 
-    missing_auth_response = raw_client.get("/api/v1/accounts")
-    assert missing_auth_response.status_code == 401
-
-    invalid_auth_response = raw_client.get(
-        "/api/v1/accounts",
-        headers={"Authorization": "Bearer invalid-token"},
-    )
-    assert invalid_auth_response.status_code == 401
-
     create_account_response = raw_client.post(
         "/api/v1/accounts",
-        headers=headers,
         json={
             "name": "成员现金账户",
             "type": "CASH",
@@ -228,7 +230,7 @@ def test_auth_routes_and_dependency_guards(raw_client: TestClient, db_session: S
     )
     assert create_account_response.status_code == 200
 
-    admin_forbidden_response = raw_client.get("/api/v1/admin/users", headers=headers)
+    admin_forbidden_response = raw_client.get("/api/v1/admin/users")
     assert admin_forbidden_response.status_code == 403
 
     duplicate_register_response = raw_client.post(
@@ -243,16 +245,14 @@ def test_auth_routes_and_dependency_guards(raw_client: TestClient, db_session: S
 
 
 def test_admin_routes_with_admin_token(raw_client: TestClient):
-    admin_token = _login_token(raw_client, "admin", "admin123")
-    headers = {"Authorization": f"Bearer {admin_token}"}
+    _login(raw_client, "admin", "admin123")
 
-    list_users_response = raw_client.get("/api/v1/admin/users", headers=headers)
+    list_users_response = raw_client.get("/api/v1/admin/users")
     assert list_users_response.status_code == 200
     assert any(item["username"] == "admin" for item in list_users_response.json())
 
     create_user_response = raw_client.post(
         "/api/v1/admin/users",
-        headers=headers,
         json={
             "username": "created-by-admin",
             "password": "member-pass-123",
@@ -265,7 +265,6 @@ def test_admin_routes_with_admin_token(raw_client: TestClient):
 
     update_user_response = raw_client.patch(
         f"/api/v1/admin/users/{created_user_id}",
-        headers=headers,
         json={"is_active": False, "role": "MEMBER"},
     )
     assert update_user_response.status_code == 200
@@ -273,14 +272,12 @@ def test_admin_routes_with_admin_token(raw_client: TestClient):
 
     last_admin_guard = raw_client.patch(
         "/api/v1/admin/users/1",
-        headers=headers,
         json={"role": "MEMBER"},
     )
     assert last_admin_guard.status_code == 400
 
     create_invite_response = raw_client.post(
         "/api/v1/admin/invite-codes",
-        headers=headers,
         json={
             "code": "ADMIN-INVITE-001",
             "max_uses": 5,
@@ -291,13 +288,12 @@ def test_admin_routes_with_admin_token(raw_client: TestClient):
     assert create_invite_response.status_code == 200
     invite_id = create_invite_response.json()["id"]
 
-    list_invites_response = raw_client.get("/api/v1/admin/invite-codes", headers=headers)
+    list_invites_response = raw_client.get("/api/v1/admin/invite-codes")
     assert list_invites_response.status_code == 200
     assert any(item["id"] == invite_id for item in list_invites_response.json())
 
     update_invite_response = raw_client.patch(
         f"/api/v1/admin/invite-codes/{invite_id}",
-        headers=headers,
         json={"is_active": False, "note": "disabled"},
     )
     assert update_invite_response.status_code == 200

@@ -83,6 +83,7 @@ export default function App() {
   const location = useLocation();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.lg;
+  const allowSelfRegistration = import.meta.env.DEV || import.meta.env.VITE_ALLOW_SELF_REGISTRATION === "true";
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [session, setSession] = useState<AuthSession | null>(() => getStoredSession());
 
@@ -102,7 +103,14 @@ export default function App() {
     return items;
   }, [session?.user.role]);
 
-  useEffect(() => onAuthExpired(() => setSession(null)), []);
+  useEffect(
+    () =>
+      onAuthExpired(() => {
+        clearSession();
+        setSession(null);
+      }),
+    []
+  );
 
   useEffect(() => {
     if (!session) {
@@ -127,14 +135,14 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [session?.access_token]);
+  }, [session?.expires_at]);
 
   if (!session) {
     const redirectFrom = `${location.pathname}${location.search}${location.hash}`;
     return (
       <Routes>
-        <Route path="/login" element={<LoginPage onLogin={(nextSession) => setSession(nextSession)} />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/login" element={<LoginPage onLogin={(nextSession) => setSession(nextSession)} allowSelfRegistration={allowSelfRegistration} />} />
+        {allowSelfRegistration && <Route path="/register" element={<RegisterPage />} />}
         <Route path="*" element={<Navigate to="/login" replace state={{ from: redirectFrom }} />} />
       </Routes>
     );
@@ -160,7 +168,12 @@ export default function App() {
     hour12: false
   }).format(new Date());
 
-  function handleLogout() {
+  async function handleLogout() {
+    try {
+      await api.post<void>("/auth/logout", {});
+    } catch {
+      // Ignore API failures; local session should still be cleared.
+    }
     clearSession();
     setSession(null);
     navigate("/login", { replace: true });
@@ -233,15 +246,15 @@ export default function App() {
             <Tag color="blue" className="header-user-tag">
               {session.user.username}
             </Tag>
-            <Button size={isMobile ? "small" : "middle"} icon={<LogoutOutlined />} onClick={handleLogout}>
-              {isMobile ? "退出" : "退出登录"}
-            </Button>
-          </Space>
+                <Button size={isMobile ? "small" : "middle"} icon={<LogoutOutlined />} onClick={() => void handleLogout()}>
+                  {isMobile ? "退出" : "退出登录"}
+                </Button>
+              </Space>
         </Header>
         <Content className="app-content">
           <Routes>
             <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="/register" element={<Navigate to="/" replace />} />
+            <Route path="/register" element={<Navigate to={allowSelfRegistration ? "/login" : "/"} replace />} />
             <Route path="/" element={<DashboardPage />} />
             <Route path="/allocation" element={<AllocationPage />} />
             <Route path="/tags" element={<TagGroupsPage />} />

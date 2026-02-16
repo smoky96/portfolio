@@ -11,8 +11,6 @@ export interface AuthUser {
 }
 
 export interface AuthSession {
-  access_token: string;
-  token_type: "bearer";
   expires_at: string;
   user: AuthUser;
 }
@@ -31,12 +29,10 @@ function safeStorage() {
 function parseSession(raw: string): AuthSession | null {
   try {
     const parsed = JSON.parse(raw) as Partial<AuthSession>;
-    if (!parsed.access_token || !parsed.expires_at || !parsed.user) {
+    if (!parsed.expires_at || !parsed.user) {
       return null;
     }
     return {
-      access_token: String(parsed.access_token),
-      token_type: "bearer",
       expires_at: String(parsed.expires_at),
       user: parsed.user as AuthUser
     };
@@ -86,11 +82,6 @@ export function clearSession() {
 export function getRememberedUsername() {
   const storage = safeStorage();
   return storage?.getItem(REMEMBERED_USER_KEY) ?? "";
-}
-
-export function getAccessToken() {
-  const session = getStoredSession();
-  return session?.access_token ?? null;
 }
 
 export function dispatchAuthExpired() {

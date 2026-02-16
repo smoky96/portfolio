@@ -17,7 +17,6 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models import User
-from app.services.auth import ensure_bootstrap_admin, ensure_bootstrap_invite_code
 from app.services.quotes import auto_backfill_history_for_active_positions, auto_refresh_quotes_for_active_positions, refresh_quotes
 
 settings = get_settings()
@@ -67,14 +66,6 @@ async def run_interval_quote_refresh() -> None:
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
 
-    bootstrap_db = SessionLocal()
-    try:
-        admin = ensure_bootstrap_admin(bootstrap_db)
-        ensure_bootstrap_invite_code(bootstrap_db, created_by_id=admin.id)
-        bootstrap_db.commit()
-    finally:
-        bootstrap_db.close()
-
     scheduler.add_job(
         run_daily_quote_refresh,
         trigger=CronTrigger(
@@ -106,15 +97,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     lifespan=lifespan,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/docs" if settings.expose_api_docs else None,
+    redoc_url="/api/redoc" if settings.expose_api_docs else None,
+    openapi_url="/api/openapi.json" if settings.expose_api_docs else None,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=settings.cors_allowed_origins_list,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

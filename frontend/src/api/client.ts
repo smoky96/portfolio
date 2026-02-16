@@ -1,4 +1,4 @@
-import { clearSession, dispatchAuthExpired, getAccessToken } from "../auth/session";
+import { clearSession, dispatchAuthExpired } from "../auth/session";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
@@ -10,11 +10,7 @@ export class UnauthorizedError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getAccessToken();
   const headers = new Headers(init?.headers ?? undefined);
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
   const isFormDataBody = typeof FormData !== "undefined" && init?.body instanceof FormData;
   if (!isFormDataBody && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -22,7 +18,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers
+    headers,
+    credentials: "include"
   });
 
   if (!res.ok) {

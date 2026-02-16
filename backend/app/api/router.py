@@ -2,9 +2,12 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_current_user
 from app.api.routes import accounts, admin, allocation, auth, dashboard, holdings, instruments, quotes, rebalance, transactions
+from app.core.config import get_settings
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+if get_settings().allow_self_registration:
+    api_router.include_router(auth.register_router, prefix="/auth", tags=["auth"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(accounts.router, prefix="/accounts", tags=["accounts"], dependencies=[Depends(get_current_user)])
 api_router.include_router(allocation.router, prefix="/allocation", tags=["allocation"], dependencies=[Depends(get_current_user)])

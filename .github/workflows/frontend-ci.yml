@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - "frontend/**"
+      - "backend/**"
+      - "docker-compose.yml"
       - ".github/workflows/frontend-ci.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "backend/**"
+      - "docker-compose.yml"
       - ".github/workflows/frontend-ci.yml"
   workflow_dispatch:
     inputs:
@@ -33,17 +37,44 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: frontend/package.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Production Dependency Audit
+        run: npm audit --omit=dev
 
       - name: Build Frontend
         run: npm run build
 
+      - name: Report Bundle Size
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+          const dir = "dist/assets";
+          const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith(".js")) : [];
+          const rows = files
+            .map((file) => ({ file, size: fs.statSync(path.join(dir, file)).size }))
+            .sort((a, b) => b.size - a.size);
+          if (!rows.length) {
+            process.exit(0);
+          }
+          const limit = 500 * 1024;
+          for (const row of rows) {
+            console.log(`${row.file}\t${(row.size / 1024).toFixed(1)} KiB`);
+          }
+          if (rows[0].size > limit) {
+            console.log(
+              `::warning::Largest bundle ${rows[0].file} is ${(rows[0].size / 1024).toFixed(1)} KiB (> 500 KiB)`
+            );
+          }
+          NODE
+
   e2e-smoke:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_e2e == 'true'
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.run_e2e == 'true'
 
     steps:
       - name: Checkout
@@ -54,7 +85,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: frontend/package.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Prepare Env
         run: cp .env.example .env
@@ -68,21 +99,21 @@ jobs:
       - name: Install Frontend Dependencies
         run: |
           cd frontend
-          npm install
+          npm ci
 
       - name: Install Playwright Chromium
         run: |
           cd frontend
           npx playwright install --with-deps chromium
 
-      - name: Run Playwright Regression
+      - name: Run Playwright Smoke
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:8080
           PLAYWRIGHT_AUTH_USER: admin
           PLAYWRIGHT_AUTH_PASS: admin123
         run: |
           cd frontend
-          npm run test:e2e:regression
+          npm run test:e2e:smoke
 
       - name: Upload Playwright Report
         if: always()

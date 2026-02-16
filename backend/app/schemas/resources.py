@@ -26,8 +26,6 @@ class LoginRequest(BaseModel):
 
 
 class AuthTokenRead(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
     expires_at: datetime
     user: UserRead
 
