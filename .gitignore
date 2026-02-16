@@ -3,6 +3,7 @@
 
 # env
 .env
+.env.prod
 
 # python
 __pycache__/
