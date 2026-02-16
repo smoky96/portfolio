@@ -28,6 +28,7 @@ Critical values you must set:
 - `APP_ENV=prod`
 - `DATABASE_URL=<managed postgres url>`
 - `JWT_SECRET_KEY=<long random secret, at least 32 chars>`
+- `BOOTSTRAP_ADMIN_USERNAME=<admin username>`
 - `BOOTSTRAP_ADMIN_PASSWORD=<strong password>`
 - `BOOTSTRAP_ADMIN_INVITE_CODE=<unique non-default value>`
 - `ALLOW_SELF_REGISTRATION=false`
@@ -38,6 +39,7 @@ Critical values you must set:
 Values that depend on your final domains:
 
 - `CORS_ALLOWED_ORIGINS=https://<frontend-domain>`
+- do not include path in `CORS_ALLOWED_ORIGINS` (for example use `https://app.example.com`, not `https://app.example.com/login`)
 - `COOKIE_SAMESITE=none` when frontend and API are on different sites
 - `COOKIE_SAMESITE=lax` when frontend and API are same-site
 - `COOKIE_DOMAIN=` leave empty for default platform domains
@@ -106,15 +108,20 @@ Update backend env on Render to match the final frontend URL:
 
 Redeploy backend after env updates.
 
-## 6. Bootstrap Admin (One Time)
+## 6. Bootstrap Admin (No Shell Required)
 
-Open Render Shell for the backend service and run:
+At app startup, backend now auto-syncs bootstrap auth values from env:
 
-```bash
-python -m app.scripts.bootstrap_admin
-```
+- `BOOTSTRAP_ADMIN_USERNAME`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `BOOTSTRAP_ADMIN_INVITE_CODE`
 
-This creates/ensures the bootstrap admin user and invite code.
+This means:
+
+- you do not need Render Shell on free plan
+- changing bootstrap env values requires a backend redeploy/restart
+- startup will force the bootstrap user to `ADMIN` and `is_active=true`
+- startup will sync bootstrap password to `BOOTSTRAP_ADMIN_PASSWORD`
 
 ## 7. Verify
 
@@ -136,6 +143,22 @@ Security checks:
 
 - `/api/docs` should be unavailable in production.
 - Self registration should be disabled.
+
+Optional API checks:
+
+```bash
+# CORS preflight should be allowed for your frontend origin
+curl -i -X OPTIONS "https://<render-backend-domain>/api/v1/auth/login" \
+  -H "Origin: https://<frontend-domain>" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type"
+
+# Login endpoint should return 200 and set cookie
+curl -i -X POST "https://<render-backend-domain>/api/v1/auth/login" \
+  -H "Origin: https://<frontend-domain>" \
+  -H "Content-Type: application/json" \
+  --data '{"username":"<bootstrap_username>","password":"<bootstrap_password>"}'
+```
 
 ## 8. Known Free-Tier Limits
 
@@ -164,3 +187,54 @@ Then set:
 - Keep previous frontend deployment in Cloudflare Pages deployment history.
 - Roll back frontend first if UI breaks.
 - Roll back backend if API or auth flow breaks.
+
+## 11. Common Issues and Fixes
+
+### `Disallowed CORS origin` on login
+
+Root cause:
+
+- `CORS_ALLOWED_ORIGINS` does not exactly match frontend origin.
+
+Fix:
+
+- Set `CORS_ALLOWED_ORIGINS=https://<frontend-domain>` (no path, no extra origin, no `/login`).
+- Redeploy backend.
+
+### Login request succeeds but UI still goes back to login page
+
+Root cause:
+
+- cross-site cookie/session issue between frontend and backend domains.
+
+Fix:
+
+- Keep `COOKIE_SECURE=true`.
+- Use `COOKIE_SAMESITE=none` when frontend and backend are different sites.
+- Leave `COOKIE_DOMAIN` unset for default Pages/Render domains.
+
+### Bootstrap credentials in env do not work
+
+Checklist:
+
+- confirm backend env values are set on Render
+- redeploy backend after updating env
+- verify `BOOTSTRAP_ADMIN_USERNAME` + `BOOTSTRAP_ADMIN_PASSWORD` are what you expect
+
+Behavior note:
+
+- startup sync overrides bootstrap admin password with `BOOTSTRAP_ADMIN_PASSWORD` on every restart.
+
+### Cloudflare Pages has no `Vite` framework preset
+
+Fix:
+
+- choose `None` preset
+- do not choose `VitePress`
+- set `Root directory=frontend`
+- set `Build command=npm run build`
+- set `Build output directory=dist`
+
+### Render free plan cannot open service shell
+
+Use this guide's startup bootstrap sync flow instead of shell-based manual bootstrap.
