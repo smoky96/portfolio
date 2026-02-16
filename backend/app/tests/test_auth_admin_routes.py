@@ -63,11 +63,13 @@ def test_security_helpers_and_auth_service(db_session: Session):
     admin = db_session.query(User).filter(User.username == "admin").one()
     admin.role = UserRole.MEMBER
     admin.is_active = False
+    admin.password_hash = hash_password("legacy-password-123")
     db_session.commit()
 
     ensured_admin = ensure_bootstrap_admin(db_session)
     assert ensured_admin.role == UserRole.ADMIN
     assert ensured_admin.is_active is True
+    assert verify_password("admin123", ensured_admin.password_hash)
 
     invite = ensure_bootstrap_invite_code(db_session, created_by_id=ensured_admin.id)
     assert invite.code

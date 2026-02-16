@@ -18,6 +18,7 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models import User
 from app.services.quotes import auto_backfill_history_for_active_positions, auto_refresh_quotes_for_active_positions, refresh_quotes
+from app.services.auth import ensure_bootstrap_admin, ensure_bootstrap_invite_code
 
 settings = get_settings()
 
@@ -65,6 +66,13 @@ async def run_interval_quote_refresh() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        admin = ensure_bootstrap_admin(db)
+        ensure_bootstrap_invite_code(db, created_by_id=admin.id)
+        db.commit()
+    finally:
+        db.close()
 
     scheduler.add_job(
         run_daily_quote_refresh,

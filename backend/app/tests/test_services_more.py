@@ -577,17 +577,39 @@ async def test_yahoo_adapter_and_main_lifecycle(monkeypatch):
     assert closed["value"] is True
 
     # lifespan hooks
-    state = {"create": False, "job": False, "start": False, "shutdown": False}
+    state = {
+        "create": False,
+        "job": False,
+        "start": False,
+        "shutdown": False,
+        "bootstrap_admin": False,
+        "bootstrap_invite": False,
+    }
 
     monkeypatch.setattr(main_mod.Base.metadata, "create_all", lambda bind=None: state.__setitem__("create", True))
     monkeypatch.setattr(main_mod.scheduler, "add_job", lambda *args, **kwargs: state.__setitem__("job", True))
     monkeypatch.setattr(main_mod.scheduler, "start", lambda: state.__setitem__("start", True))
     monkeypatch.setattr(main_mod.scheduler, "shutdown", lambda wait=False: state.__setitem__("shutdown", True))
 
+    class _FakeAdmin:
+        id = 1
+
+    def fake_ensure_bootstrap_admin(db):
+        state["bootstrap_admin"] = True
+        return _FakeAdmin()
+
+    def fake_ensure_bootstrap_invite_code(db, created_by_id):
+        state["bootstrap_invite"] = created_by_id == 1
+
+    monkeypatch.setattr(main_mod, "ensure_bootstrap_admin", fake_ensure_bootstrap_admin)
+    monkeypatch.setattr(main_mod, "ensure_bootstrap_invite_code", fake_ensure_bootstrap_invite_code)
+
     async with main_mod.lifespan(FastAPI()):
         assert state["create"] is True
         assert state["job"] is True
         assert state["start"] is True
+        assert state["bootstrap_admin"] is True
+        assert state["bootstrap_invite"] is True
 
     assert state["shutdown"] is True
     assert main_mod.health()["status"] == "ok"

@@ -69,17 +69,20 @@ def mark_user_login(user: User) -> None:
 def ensure_bootstrap_admin(db: Session) -> User:
     settings = get_settings()
     admin_username = normalize_username(settings.bootstrap_admin_username)
+    admin_password = settings.bootstrap_admin_password
     admin = db.scalar(select(User).where(User.username == admin_username))
     if admin is None:
         admin = User(
             username=admin_username,
-            password_hash=hash_password(settings.bootstrap_admin_password),
+            password_hash=hash_password(admin_password),
             role=UserRole.ADMIN,
             is_active=True,
         )
         db.add(admin)
         db.flush()
-    elif admin.role != UserRole.ADMIN:
+    elif not verify_password(admin_password, admin.password_hash):
+        admin.password_hash = hash_password(admin_password)
+    if admin.role != UserRole.ADMIN:
         admin.role = UserRole.ADMIN
     if not admin.is_active:
         admin.is_active = True
