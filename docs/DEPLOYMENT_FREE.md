@@ -188,7 +188,70 @@ Then set:
 - Roll back frontend first if UI breaks.
 - Roll back backend if API or auth flow breaks.
 
-## 11. Common Issues and Fixes
+## 11. Pre-Deploy Backup Script (Local)
+
+Use the repository script before every production deploy:
+
+- script path: `scripts/predeploy_backup.sh`
+- run location: your local machine/terminal (not Render service shell)
+- prerequisites on local machine: `pg_dump`, `pg_restore` (optional `openssl` for encryption)
+
+Recommended deploy flow (every release):
+
+1. Open terminal on your local machine and `cd` into repo root.
+2. Run backup script and confirm it prints `completed: ...`.
+3. Start production deploy (Render/Cloudflare).
+4. If deploy fails and data is affected, restore from the latest backup file.
+
+Basic run (from repo root):
+
+```bash
+DATABASE_URL='postgresql+psycopg2://...' ./scripts/predeploy_backup.sh
+```
+
+Or use your local `.env.prod` values:
+
+```bash
+set -a
+. ./.env.prod
+set +a
+./scripts/predeploy_backup.sh
+```
+
+Shortcut target (from repo root):
+
+```bash
+make predeploy-backup
+```
+
+Quick copy/paste example (from repo root):
+
+```bash
+cd /Users/bytedance/dev/portfolio
+set -a
+. ./.env.prod
+set +a
+make predeploy-backup
+```
+
+Optional settings:
+
+- `BACKUP_ENCRYPTION_KEY=<secret>` to output encrypted `.dump.enc`
+- `BACKUP_DIR=/path/to/backups` to change output directory (default: `$HOME/portfolio-backups`)
+- `BACKUP_KEEP_COUNT=14` to keep latest N backups
+
+Note:
+
+- the script accepts SQLAlchemy-style URLs such as `postgresql+psycopg2://...` and normalizes them for `pg_dump`.
+
+Rollback restore example (restore into a new database, then switch `DATABASE_URL`):
+
+```bash
+pg_restore --clean --if-exists --no-owner --no-privileges \
+  -d "$NEW_DATABASE_URL" "$HOME/portfolio-backups/portfolio_predeploy_YYYYMMDD_HHMMSS.dump"
+```
+
+## 12. Common Issues and Fixes
 
 ### `Disallowed CORS origin` on login
 
