@@ -65,6 +65,10 @@ ENV_FILE=.env.prod docker compose -f docker-compose.prod.yml up -d --build
 ENV_FILE=.env.prod docker compose -f docker-compose.prod.yml exec -T backend python -m app.scripts.bootstrap_admin
 ```
 
+For free-tier split deployment (Cloudflare Pages + Render + managed Postgres), see:
+
+- `docs/DEPLOYMENT_FREE.md`
+
 ## Security Defaults
 
 - Browser auth uses `HttpOnly` cookie.
