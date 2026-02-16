@@ -82,12 +82,14 @@ https://portfolio-api.onrender.com
 ## 4. Deploy Frontend (Cloudflare Pages)
 
 1. In Cloudflare Pages, connect the same GitHub repo.
-2. Set:
-   - Framework preset: `Vite`
+2. Set build options (manual configuration works even if `Vite` preset is not shown):
+   - Framework preset: `None` (or `Vite` if available)
+   - Do not choose `VitePress` for this project
    - Root directory: `frontend`
-   - Build command: `npm ci && npm run build`
+   - Build command: `npm run build`
    - Build output directory: `dist`
 3. Add environment variables:
+   - `NODE_VERSION=22`
    - `VITE_API_BASE=https://<render-backend-domain>/api/v1`
    - `VITE_ALLOW_SELF_REGISTRATION=false`
 4. Deploy and get the frontend URL, for example:
@@ -162,4 +164,3 @@ Then set:
 - Keep previous frontend deployment in Cloudflare Pages deployment history.
 - Roll back frontend first if UI breaks.
 - Roll back backend if API or auth flow breaks.
-
