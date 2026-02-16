@@ -94,6 +94,35 @@ def _position_pair_if_needed(account_id: int, instrument_id: int | None, tx_type
     return set()
 
 
+def _account_cash_balance_in_currency(db: Session, owner_id: int, account_id: int, currency: str) -> Decimal:
+    txs = db.scalars(
+        select(Transaction)
+        .where(
+            Transaction.owner_id == owner_id,
+            Transaction.account_id == account_id,
+            Transaction.currency == currency.upper(),
+        )
+        .order_by(Transaction.executed_at, Transaction.id)
+    )
+    balance = Decimal("0")
+    for tx in txs:
+        balance += _cash_delta(tx)
+    return balance
+
+
+def _validate_buy_cash_balance(db: Session, payload: TransactionCreate, owner_id: int) -> None:
+    if payload.type != TransactionType.BUY:
+        return
+
+    required = Decimal(payload.amount) + Decimal(payload.fee) + Decimal(payload.tax)
+    available = _account_cash_balance_in_currency(db, owner_id, payload.account_id, payload.currency)
+    if available < required:
+        raise HTTPException(
+            status_code=400,
+            detail=f"insufficient cash balance for BUY: required={required} {payload.currency.upper()}, available={available} {payload.currency.upper()}",
+        )
+
+
 def _get_transaction_or_404(db: Session, transaction_id: int, owner_id: int) -> Transaction:
     tx = db.scalar(select(Transaction).where(Transaction.id == transaction_id, Transaction.owner_id == owner_id))
     if tx is None:
@@ -298,6 +327,7 @@ def create_transaction(db: Session, payload: TransactionCreate, owner_id: int, *
     _validate_transaction_payload(payload)
     _ensure_account(db, payload.account_id, owner_id)
     _ensure_instrument(db, payload.instrument_id, owner_id)
+    _validate_buy_cash_balance(db, payload, owner_id)
 
     transfer_group_id: str | None = None
 

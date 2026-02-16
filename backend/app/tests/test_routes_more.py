@@ -381,6 +381,22 @@ def test_transactions_update_delete_and_reverse(client):
 
     now = datetime.now(timezone.utc).isoformat()
 
+    funding_resp = client.post(
+        "/api/v1/transactions",
+        json={
+            "type": "CASH_IN",
+            "account_id": account_id,
+            "amount": "5000",
+            "fee": "0",
+            "tax": "0",
+            "currency": "CNY",
+            "executed_at": now,
+            "executed_tz": "Asia/Shanghai",
+            "note": "初始入金",
+        },
+    )
+    assert funding_resp.status_code == 200
+
     buy_resp = client.post(
         "/api/v1/transactions",
         json={
@@ -458,6 +474,88 @@ def test_transactions_update_delete_and_reverse(client):
     holdings_resp = client.get("/api/v1/holdings")
     assert holdings_resp.status_code == 200
     assert holdings_resp.json() == []
+
+
+def test_buy_requires_sufficient_cash_balance(client):
+    account_id = _create_account(client, name="余额校验账户", account_type="BROKERAGE")
+    root_id = _create_root_node(client, name="余额校验节点")
+    leaf_resp = client.post(
+        "/api/v1/allocation/nodes",
+        json={"parent_id": root_id, "name": "余额校验分类", "target_weight": "100", "order_index": 0},
+    )
+    assert leaf_resp.status_code == 200
+    leaf_id = leaf_resp.json()["id"]
+
+    instrument_resp = client.post(
+        "/api/v1/instruments",
+        json={
+            "symbol": "BAL-001",
+            "market": "CN",
+            "type": "STOCK",
+            "currency": "CNY",
+            "name": "余额校验标的",
+            "default_account_id": account_id,
+            "allocation_node_id": leaf_id,
+        },
+    )
+    assert instrument_resp.status_code == 200
+    instrument_id = instrument_resp.json()["id"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    insufficient_buy = client.post(
+        "/api/v1/transactions",
+        json={
+            "type": "BUY",
+            "account_id": account_id,
+            "instrument_id": instrument_id,
+            "quantity": "1",
+            "price": "1000",
+            "amount": "1000",
+            "fee": "2",
+            "tax": "1",
+            "currency": "CNY",
+            "executed_at": now,
+            "executed_tz": "Asia/Shanghai",
+            "note": "余额不足买入",
+        },
+    )
+    assert insufficient_buy.status_code == 400
+    assert "insufficient cash balance" in insufficient_buy.text
+
+    funding_resp = client.post(
+        "/api/v1/transactions",
+        json={
+            "type": "CASH_IN",
+            "account_id": account_id,
+            "amount": "2000",
+            "fee": "0",
+            "tax": "0",
+            "currency": "CNY",
+            "executed_at": now,
+            "executed_tz": "Asia/Shanghai",
+            "note": "补充资金",
+        },
+    )
+    assert funding_resp.status_code == 200
+
+    valid_buy = client.post(
+        "/api/v1/transactions",
+        json={
+            "type": "BUY",
+            "account_id": account_id,
+            "instrument_id": instrument_id,
+            "quantity": "1",
+            "price": "1000",
+            "amount": "1000",
+            "fee": "2",
+            "tax": "1",
+            "currency": "CNY",
+            "executed_at": now,
+            "executed_tz": "Asia/Shanghai",
+            "note": "余额充足买入",
+        },
+    )
+    assert valid_buy.status_code == 200
 
 
 def test_transactions_transfer_update_forbidden_and_group_delete(client):
