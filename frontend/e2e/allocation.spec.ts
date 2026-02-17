@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { authedDelete, authedGet, authedPatch, authedPost, gotoWithLogin } from "./helpers/auth";
 
@@ -9,6 +9,12 @@ function formItem(container: Locator, label: string): Locator {
 async function safeClick(locator: Locator) {
   await locator.scrollIntoViewIfNeeded();
   await locator.click({ force: true });
+}
+
+async function expectAndCloseSuccessModal(page: Page, text: string) {
+  const modal = page.locator(".ant-modal-confirm-success").filter({ hasText: text }).last();
+  await expect(modal).toBeVisible({ timeout: 15000 });
+  await modal.getByRole("button", { name: /确\s*定/ }).click();
 }
 
 interface AllocationNodeFixture {
@@ -138,7 +144,7 @@ test.describe("Allocation tag management @allocation", () => {
       const allocationCard = page.locator(".ant-card").filter({ hasText: "标的标签分配" }).first();
       await expect(allocationCard).toBeVisible();
 
-      const saveButton = allocationCard.getByRole("button", { name: "保存分配", exact: true });
+      const saveButton = allocationCard.getByRole("button", { name: "保存分配", exact: true }).first();
       await expect(saveButton).toBeDisabled();
 
       const row = allocationCard.locator(".ant-table-tbody tr").filter({ hasText: targetInstrument.symbol }).first();
@@ -157,7 +163,7 @@ test.describe("Allocation tag management @allocation", () => {
 
       await expect(saveButton).toBeEnabled();
       await safeClick(saveButton);
-      await expect(page.getByText("标签分配已保存")).toBeVisible();
+      await expectAndCloseSuccessModal(page, "标签分配已保存");
 
       const afterSaveResp = await authedGet(request, "/api/v1/allocation/instrument-tags");
       expect(afterSaveResp.ok()).toBeTruthy();

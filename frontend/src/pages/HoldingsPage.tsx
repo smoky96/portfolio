@@ -1,5 +1,4 @@
 import {
-  Alert,
   Button,
   Card,
   Col,
@@ -20,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import { Account, DriftItem, Holding } from "../types";
 import { formatDecimal, formatPercent } from "../utils/format";
+import { showErrorModal } from "../utils/errorModal";
 
 type PnlFilter = "ALL" | "POSITIVE" | "NEGATIVE";
 type DriftFilter = "ALL" | "ALERT_ONLY" | "NORMAL_ONLY";
@@ -36,7 +36,6 @@ export default function HoldingsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [nodeDrifts, setNodeDrifts] = useState<DriftItem[]>([]);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [keyword, setKeyword] = useState("");
@@ -56,9 +55,8 @@ export default function HoldingsPage() {
       setAccounts(a);
       setHoldings(h);
       setNodeDrifts(d);
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err);
     } finally {
       setLoading(false);
     }
@@ -276,8 +274,6 @@ export default function HoldingsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack holdings-page">
-      {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
-
       <div className="page-grid page-section holdings-kpi-grid">
         <Card className="holdings-kpi-card">
           <Typography.Text type="secondary">组合市值</Typography.Text>

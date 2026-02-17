@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Form, Input, Popconfirm, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Form, Input, Popconfirm, Select, Space, Table, Tag, Typography } from "antd";
 import type { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import { ACCOUNT_TYPE_LABELS } from "../constants/labels";
 import { Account, DashboardSummary, Holding, ReturnCurvePoint, Transaction } from "../types";
 import { formatDecimal } from "../utils/format";
+import { showErrorModal, showSuccessModal } from "../utils/errorModal";
 
 interface AccountForm {
   name: string;
@@ -25,8 +26,6 @@ export default function AccountsPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [curve, setCurve] = useState<ReturnCurvePoint[]>([]);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm<AccountForm>();
 
@@ -156,9 +155,8 @@ export default function AccountsPage() {
       setHoldings(holdingsData);
       setCurve(curveData);
       setAccountIdsWithTransactions(new Set(txData.map((item) => item.account_id)));
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err);
     } finally {
       setLoading(false);
     }
@@ -176,29 +174,28 @@ export default function AccountsPage() {
         base_currency: values.base_currency.toUpperCase(),
         is_active: true
       });
-      setMessage("账户已创建");
+      showSuccessModal("账户已创建");
       form.resetFields();
       form.setFieldValue("type", "CASH");
       form.setFieldValue("base_currency", "CNY");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "创建账户失败" });
     }
   }
 
   async function onDelete(account: Account) {
     if (accountIdsWithTransactions.has(account.id)) {
-      setError("该账户已有流水，不能删除");
+      showErrorModal("该账户已有流水，不能删除", { title: "删除账户失败" });
       return;
     }
     setDeletingAccountId(account.id);
     try {
       await api.delete<{ deleted: boolean; unbound_instruments: number }>(`/accounts/${account.id}`);
-      setMessage("账户已删除");
-      setError("");
+      showSuccessModal("账户已删除");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "删除账户失败" });
     } finally {
       setDeletingAccountId(null);
     }
@@ -250,9 +247,6 @@ export default function AccountsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack accounts-page">
-      {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
-      {message && <Alert type="success" showIcon message={message} closable />}
-
       <Card
         className="page-section accounts-curve-card"
         title={`账户总资产曲线（${baseCurrency}）`}

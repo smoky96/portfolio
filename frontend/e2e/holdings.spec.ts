@@ -13,9 +13,10 @@ function cardValueByTitle(page: Page, title: string): Promise<string> {
   return card.locator(".ant-card-body .ant-typography").nth(1).innerText();
 }
 
-async function safeClick(locator: ReturnType<Page["locator"]>) {
-  await locator.scrollIntoViewIfNeeded();
-  await locator.click({ force: true });
+async function expectAndCloseSuccessModal(page: Page, text: string) {
+  const modal = page.locator(".ant-modal-confirm-success").filter({ hasText: text }).last();
+  await expect(modal).toBeVisible({ timeout: 15000 });
+  await modal.getByRole("button", { name: /确\s*定/ }).click();
 }
 
 test.describe("Holdings and custom instruments @holdings", () => {
@@ -60,7 +61,7 @@ test.describe("Holdings and custom instruments @holdings", () => {
     expect(toNumber(alertCardText)).toBe(alertCount);
   });
 
-  test("custom instruments page supports create and manual quote update", async ({ page }, testInfo) => {
+  test("custom instruments page supports create and manual quote update", async ({ page, request }, testInfo) => {
     const unique = Date.now().toString().slice(-6);
     const symbol = `CUST_${testInfo.project.name.replace(/[^A-Za-z0-9]/g, "").toUpperCase()}_${unique}`;
     const instrumentName = `自定义测试标的${unique}`;
@@ -74,19 +75,39 @@ test.describe("Holdings and custom instruments @holdings", () => {
     await page.locator("#name").fill(instrumentName);
     await page.getByRole("button", { name: "创建自定义标的" }).click();
 
-    await expect(page.getByText("自定义标的已创建")).toBeVisible();
+    await expectAndCloseSuccessModal(page, "自定义标的已创建");
     await page.getByPlaceholder("按代码或名称搜索").fill(symbol);
 
     const row = page.locator(".ant-table-tbody tr.ant-table-row").filter({ hasText: symbol }).first();
     await expect(row).toBeVisible();
     await expect(row).toContainText(instrumentName);
 
-    const priceInput = row.locator("input").first();
-    await priceInput.fill(updatedPrice);
-    await safeClick(row.locator("button.ant-btn-primary").first());
+    const instrumentsResp = await authedGet(request, "/api/v1/instruments");
+    expect(instrumentsResp.ok()).toBeTruthy();
+    const instruments = (await instrumentsResp.json()) as Array<{ id: number; symbol: string }>;
+    const targetInstrument = instruments.find((item) => item.symbol === symbol);
+    expect(targetInstrument).toBeTruthy();
+    if (!targetInstrument) {
+      return;
+    }
 
-    await expect(page.getByText("现价已更新")).toBeVisible();
-    await expect(row).toContainText("手动");
-    await expect(row).toContainText("12.345");
+    const priceInput = row.locator("input").first();
+    await priceInput.click();
+    await priceInput.press("ControlOrMeta+A");
+    await priceInput.type(updatedPrice);
+    await priceInput.press("Enter");
+    const saveButton = row.getByRole("button", { name: /保\s*存/ }).first();
+    await expect(saveButton).toBeEnabled();
+    const updateResponsePromise = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/quotes/manual-overrides") && response.request().method() === "POST",
+      { timeout: 15000 }
+    );
+    await saveButton.click();
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse.ok()).toBeTruthy();
+
+    await expectAndCloseSuccessModal(page, "现价已更新");
+    await expect(row).toContainText("手动", { timeout: 15000 });
+    await expect(row).toContainText("12.345", { timeout: 15000 });
   });
 });

@@ -1,5 +1,4 @@
 import {
-  Alert,
   Button,
   Card,
   Form,
@@ -9,8 +8,7 @@ import {
   Space,
   Table,
   Tag,
-  Typography,
-  message
+  Typography
 } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
@@ -18,6 +16,7 @@ import { api } from "../api/client";
 import { ACCOUNT_TYPE_LABELS, INSTRUMENT_TYPE_LABELS } from "../constants/labels";
 import { Account, Holding, Instrument, LatestQuote } from "../types";
 import { formatDecimal } from "../utils/format";
+import { showErrorModal, showSuccessModal } from "../utils/errorModal";
 
 interface CustomInstrumentForm {
   symbol: string;
@@ -76,7 +75,6 @@ export default function CustomInstrumentsPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [latestQuotes, setLatestQuotes] = useState<LatestQuote[]>([]);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [creatingCustom, setCreatingCustom] = useState(false);
   const [submittingPriceId, setSubmittingPriceId] = useState<number | null>(null);
@@ -97,9 +95,8 @@ export default function CustomInstrumentsPage() {
       setHoldings(h);
       setInstruments(i);
       setLatestQuotes(q);
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err);
     } finally {
       setLoading(false);
     }
@@ -121,12 +118,12 @@ export default function CustomInstrumentsPage() {
         name: values.name.trim(),
         default_account_id: values.default_account_id ?? null
       });
-      message.success("自定义标的已创建");
+      showSuccessModal("自定义标的已创建");
       customForm.resetFields();
       customForm.setFieldsValue({ type: "STOCK", currency: "CNY" });
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "创建自定义标的失败" });
     } finally {
       setCreatingCustom(false);
     }
@@ -135,7 +132,7 @@ export default function CustomInstrumentsPage() {
   async function onUpdateCustomPrice(row: InstrumentRow) {
     const price = customPriceDrafts[row.id];
     if (!price || price <= 0) {
-      message.error("请输入大于 0 的现价");
+      showErrorModal("请输入大于 0 的现价", { title: "校验失败" });
       return;
     }
 
@@ -148,7 +145,7 @@ export default function CustomInstrumentsPage() {
         overridden_at: new Date().toISOString(),
         reason: "自定义标的手动更新现价"
       });
-      message.success("现价已更新");
+      showSuccessModal("现价已更新");
       setCustomPriceDrafts((prev) => {
         const next = { ...prev };
         delete next[row.id];
@@ -156,7 +153,7 @@ export default function CustomInstrumentsPage() {
       });
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "更新现价失败" });
     } finally {
       setSubmittingPriceId(null);
     }
@@ -222,8 +219,6 @@ export default function CustomInstrumentsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack custom-instruments-page">
-      {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
-
       <Card className="page-section custom-create-card" title="新增自定义标的">
         <Form<CustomInstrumentForm> layout="vertical" form={customForm} onFinish={(values) => void onCreateCustom(values)}>
           <div className="page-grid">

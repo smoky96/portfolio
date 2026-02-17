@@ -1,8 +1,9 @@
-import { Alert, Button, Card, Form, Input, InputNumber, Select, Switch, Table, Tag, Typography, message } from "antd";
+import { Button, Card, Form, Input, InputNumber, Select, Switch, Table, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
 import { AuthUser, UserRole } from "../auth/session";
+import { showErrorModal, showSuccessModal } from "../utils/errorModal";
 
 interface InviteCodeItem {
   id: number;
@@ -52,7 +53,6 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [inviteCodes, setInviteCodes] = useState<InviteCodeItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const [userForm] = Form.useForm<AdminUserCreateForm>();
   const [inviteForm] = Form.useForm<InviteCreateForm>();
@@ -66,9 +66,8 @@ export default function AdminUsersPage() {
       ]);
       setUsers(usersResp);
       setInviteCodes(inviteResp);
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err);
     } finally {
       setLoading(false);
     }
@@ -93,11 +92,11 @@ export default function AdminUsersPage() {
   async function createUser(values: AdminUserCreateForm) {
     try {
       await api.post<AuthUser>("/admin/users", values);
-      message.success("用户已创建");
+      showSuccessModal("用户已创建");
       userForm.resetFields(["username", "password"]);
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "创建用户失败" });
     }
   }
 
@@ -106,7 +105,7 @@ export default function AdminUsersPage() {
       await api.patch<AuthUser>(`/admin/users/${userId}`, payload);
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "更新用户失败" });
     }
   }
 
@@ -119,11 +118,11 @@ export default function AdminUsersPage() {
     };
     try {
       await api.post<InviteCodeItem>("/admin/invite-codes", payload);
-      message.success("邀请码已创建");
+      showSuccessModal("邀请码已创建");
       inviteForm.resetFields();
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "创建邀请码失败" });
     }
   }
 
@@ -134,14 +133,12 @@ export default function AdminUsersPage() {
       });
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "更新邀请码失败" });
     }
   }
 
   return (
     <div className="page-stack admin-users-page">
-      {error && <Alert type="error" showIcon message="请求失败" description={error} closable onClose={() => setError("")} />}
-
       <div className="admin-users-stats page-section">
         <Card className="admin-users-stat-card">
           <Typography.Text className="admin-users-stat-label">用户总数</Typography.Text>

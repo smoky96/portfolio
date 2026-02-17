@@ -1,5 +1,4 @@
 import {
-  Alert,
   Button,
   Card,
   Form,
@@ -13,8 +12,7 @@ import {
   Tag,
   Tooltip,
   Typography,
-  Upload,
-  message
+  Upload
 } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +21,7 @@ import { api } from "../api/client";
 import { TRANSACTION_TYPE_LABELS, TRANSACTION_TYPE_OPTIONS } from "../constants/labels";
 import { Account, Instrument, LatestQuote, Transaction, YahooLookupQuote } from "../types";
 import { formatDecimal } from "../utils/format";
+import { showErrorModal, showSuccessModal } from "../utils/errorModal";
 
 interface TransactionForm {
   type: string;
@@ -218,8 +217,6 @@ export default function TransactionsPage() {
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [latestQuotes, setLatestQuotes] = useState<LatestQuote[]>([]);
   const [txs, setTxs] = useState<Transaction[]>([]);
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm<TransactionForm>();
   const [editForm] = Form.useForm<TransactionForm>();
@@ -268,9 +265,8 @@ export default function TransactionsPage() {
       setInstruments(i);
       setLatestQuotes(q);
       setTxs(t);
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err);
     } finally {
       setLoading(false);
     }
@@ -603,11 +599,11 @@ export default function TransactionsPage() {
     setLastQueriedSymbol(resolvedSymbol);
     if (!lookup.found) {
       if (lookup.provider_status === "rate_limited") {
-        setError("Yahoo 请求限流，暂时无法自动创建该标的，请稍后重试");
+        showErrorModal("Yahoo 请求限流，暂时无法自动创建该标的，请稍后重试", { title: "标的查询失败" });
       } else if (lookup.provider_status === "not_found") {
-        setError(`未找到标的代码 ${symbol}，请确认代码后重试`);
+        showErrorModal(`未找到标的代码 ${symbol}，请确认代码后重试`, { title: "标的查询失败" });
       } else {
-        setError(`Yahoo 查询失败：${lookup.message ?? "请稍后重试"}`);
+        showErrorModal(`Yahoo 查询失败：${lookup.message ?? "请稍后重试"}`, { title: "标的查询失败" });
       }
       return null;
     }
@@ -655,7 +651,7 @@ export default function TransactionsPage() {
       if (maybeExisting) {
         return maybeExisting;
       }
-      setError(`自动创建标的失败：${String(err)}`);
+      showErrorModal(`自动创建标的失败：${String(err)}`, { title: "创建标的失败" });
       return null;
     }
   }
@@ -670,7 +666,7 @@ export default function TransactionsPage() {
     let instrument = needsInstrument ? instrumentBySymbol.get(symbol) ?? null : null;
 
     if (needsInstrument && !symbol) {
-      setError("请输入标的代码");
+      showErrorModal("请输入标的代码", { title: "表单校验失败" });
       return;
     }
 
@@ -682,7 +678,7 @@ export default function TransactionsPage() {
     }
 
     if (needsCounterparty && !values.counterparty_account_id) {
-      setError("内部转账必须选择对手账户");
+      showErrorModal("内部转账必须选择对手账户", { title: "表单校验失败" });
       return;
     }
 
@@ -690,13 +686,13 @@ export default function TransactionsPage() {
     const price = isTrade ? Number(values.price ?? 0) : null;
 
     if (isTrade && (!quantity || !price || quantity <= 0 || price <= 0)) {
-      setError("买入/卖出必须填写有效的数量和价格");
+      showErrorModal("买入/卖出必须填写有效的数量和价格", { title: "表单校验失败" });
       return;
     }
 
     const principalAmount = isTrade ? round8((quantity ?? 0) * (price ?? 0)) : Number(values.amount ?? 0);
     if (!Number.isFinite(principalAmount) || principalAmount <= 0) {
-      setError("金额必须大于 0");
+      showErrorModal("金额必须大于 0", { title: "表单校验失败" });
       return;
     }
 
@@ -716,7 +712,7 @@ export default function TransactionsPage() {
         executed_tz: SHANGHAI_TZ,
         note: values.note ?? null
       });
-      setSuccessMessage("流水已创建");
+      showSuccessModal("流水已创建");
       form.resetFields();
       form.setFieldsValue({
         type: "CASH_IN",
@@ -730,7 +726,7 @@ export default function TransactionsPage() {
       setLastQueriedSymbol("");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "新增流水失败" });
     }
   }
 
@@ -760,12 +756,12 @@ export default function TransactionsPage() {
     const quantity = isTrade ? Number(values.quantity ?? 0) : null;
     const price = isTrade ? Number(values.price ?? 0) : null;
     if (isTrade && (!quantity || !price || quantity <= 0 || price <= 0)) {
-      setError("买入/卖出必须填写有效的数量和价格");
+      showErrorModal("买入/卖出必须填写有效的数量和价格", { title: "表单校验失败" });
       return;
     }
     const principalAmount = isTrade ? round8((quantity ?? 0) * (price ?? 0)) : Number(values.amount ?? 0);
     if (!Number.isFinite(principalAmount) || principalAmount <= 0) {
-      setError("金额必须大于 0");
+      showErrorModal("金额必须大于 0", { title: "表单校验失败" });
       return;
     }
 
@@ -785,12 +781,12 @@ export default function TransactionsPage() {
         executed_tz: SHANGHAI_TZ,
         note: values.note ?? null
       });
-      setSuccessMessage("流水已更新");
+      showSuccessModal("流水已更新");
       setEditingTx(null);
       editForm.resetFields();
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "更新流水失败" });
     } finally {
       setRowActionLoadingId(null);
     }
@@ -800,10 +796,10 @@ export default function TransactionsPage() {
     setRowActionLoadingId(tx.id);
     try {
       await api.delete<{ deleted: boolean; deleted_count: number }>(`/transactions/${tx.id}`);
-      setSuccessMessage("流水已删除");
+      showSuccessModal("流水已删除");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "删除流水失败" });
     } finally {
       setRowActionLoadingId(null);
     }
@@ -813,10 +809,10 @@ export default function TransactionsPage() {
     setRowActionLoadingId(tx.id);
     try {
       await api.post<Transaction>(`/transactions/${tx.id}/reverse`, {});
-      setSuccessMessage("已生成冲销流水");
+      showSuccessModal("已生成冲销流水");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "冲销流水失败" });
     } finally {
       setRowActionLoadingId(null);
     }
@@ -825,7 +821,7 @@ export default function TransactionsPage() {
   async function importCsv() {
     const file = fileList[0];
     if (!file?.originFileObj) {
-      setError("请先选择 CSV 文件");
+      showErrorModal("请先选择 CSV 文件", { title: "导入失败" });
       return;
     }
 
@@ -834,11 +830,11 @@ export default function TransactionsPage() {
 
     try {
       await api.postForm(`/transactions/import-csv?rollback_on_error=false`, fd);
-      setSuccessMessage("CSV 导入完成");
+      showSuccessModal("CSV 导入完成");
       setFileList([]);
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "CSV 导入失败" });
     }
   }
 
@@ -852,7 +848,7 @@ export default function TransactionsPage() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    message.success("CSV 模板已下载");
+    showSuccessModal("CSV 模板已下载");
   }
 
   const filteredTxs = useMemo(() => {
@@ -882,9 +878,6 @@ export default function TransactionsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack transactions-page">
-      {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
-      {successMessage && <Alert type="success" showIcon message={successMessage} closable />}
-
       <div className="page-grid page-section transactions-kpi-grid">
         <Card className="transactions-kpi-card">
           <Typography.Text type="secondary">流水总笔数</Typography.Text>

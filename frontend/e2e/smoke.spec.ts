@@ -104,7 +104,11 @@ test.describe("Portfolio smoke @smoke", () => {
     await page.locator("#login-username").fill("wrong");
     await page.locator("#login-password").fill("wrong");
     await page.getByRole("button", { name: "登录系统" }).click();
-    await expect(page.getByText("账号或密码错误，请重试。")).toBeVisible();
+    const loginErrorModal = page.locator(".ant-modal-confirm-error").last();
+    await expect(loginErrorModal).toBeVisible();
+    await expect(loginErrorModal).toContainText("账号或密码错误，请重试。");
+    await expect(page.locator(".login-card .ant-alert-error")).toHaveCount(0);
+    await loginErrorModal.getByRole("button", { name: /确\s*定/ }).click();
 
     await page.locator("#login-username").fill("admin");
     await page.locator("#login-password").fill("admin123");

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
 import { Account, AccountTagSelection, AllocationTag, AllocationTagGroup, Instrument, InstrumentTagSelection } from "../types";
+import { showErrorModal, showSuccessModal } from "../utils/errorModal";
 
 interface TagGroupForm {
   name: string;
@@ -19,8 +20,6 @@ export default function TagGroupsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [instrumentTagSelections, setInstrumentTagSelections] = useState<InstrumentTagSelection[]>([]);
   const [accountTagSelections, setAccountTagSelections] = useState<AccountTagSelection[]>([]);
-  const [error, setError] = useState("");
-  const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(false);
   const [savingTagAssignments, setSavingTagAssignments] = useState(false);
   const [activeTagGroupId, setActiveTagGroupId] = useState<number | null>(null);
@@ -49,9 +48,8 @@ export default function TagGroupsPage() {
       setAccountTagSelections(accountSelections);
       setPendingTagSelections({});
       setPendingAccountTagSelections({});
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err);
     } finally {
       setLoading(false);
     }
@@ -80,21 +78,21 @@ export default function TagGroupsPage() {
         name: values.name,
         order_index: tagGroups.length
       });
-      setMessageText("标签组已创建");
+      showSuccessModal("标签组已创建");
       tagGroupForm.resetFields();
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "创建标签组失败" });
     }
   }
 
   async function deleteTagGroup(groupId: number) {
     try {
       await api.delete(`/allocation/tag-groups/${groupId}`);
-      setMessageText("标签组已删除");
+      showSuccessModal("标签组已删除");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "删除标签组失败" });
     }
   }
 
@@ -110,21 +108,21 @@ export default function TagGroupsPage() {
         name: values.name,
         order_index: tags.filter((item) => item.group_id === activeTagGroupId).length
       });
-      setMessageText("标签已创建");
+      showSuccessModal("标签已创建");
       tagForm.resetFields(["name"]);
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "创建标签失败" });
     }
   }
 
   async function deleteTag(tagId: number) {
     try {
       await api.delete(`/allocation/tags/${tagId}`);
-      setMessageText("标签已删除");
+      showSuccessModal("标签已删除");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "删除标签失败" });
     }
   }
 
@@ -236,12 +234,12 @@ export default function TagGroupsPage() {
         }
       }
 
-      setMessageText(`标签分配已保存（${appliedCount} 项）`);
+      showSuccessModal(`标签分配已保存（${appliedCount} 项）`);
       setPendingTagSelections({});
       setPendingAccountTagSelections({});
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "保存标签分配失败" });
     } finally {
       setSavingTagAssignments(false);
     }
@@ -323,9 +321,6 @@ export default function TagGroupsPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack tags-page">
-      {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
-      {messageText && <Alert type="success" showIcon message={messageText} closable />}
-
       <Card className="page-section tags-config-card" title="标签组配置" extra={<Button onClick={() => void load()}>刷新</Button>} loading={loading}>
         <Row gutter={[16, 16]}>
           <Col xs={24} xl={8}>

@@ -1,4 +1,4 @@
-import { Alert, Card, Checkbox, Col, Row, Select, Space, Tag, Typography } from "antd";
+import { Card, Checkbox, Col, Row, Select, Space, Tag, Typography } from "antd";
 import type { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
@@ -18,6 +18,7 @@ import {
   ReturnCurvePoint
 } from "../types";
 import { formatDecimal, formatPercent } from "../utils/format";
+import { showErrorModal } from "../utils/errorModal";
 
 interface PieSlice {
   label: string;
@@ -505,7 +506,6 @@ export default function DashboardPage() {
   const [activeTagGroupId, setActiveTagGroupId] = useState<number | null>(null);
   const [showUntaggedInTagPie, setShowUntaggedInTagPie] = useState(true);
   const [curveDays, setCurveDays] = useState<number>(180);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function load(days = curveDays, options?: { silent?: boolean }) {
@@ -539,9 +539,8 @@ export default function DashboardPage() {
       setInstrumentTagSelections(instrumentSelectionsResp);
       setAccountTagSelections(accountSelectionsResp);
       setDriftItems(driftResp);
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "加载仪表盘失败" });
     } finally {
       if (!silent) {
         setLoading(false);
@@ -788,7 +787,6 @@ export default function DashboardPage() {
   if (!summary) {
     return (
       <Space direction="vertical" style={{ width: "100%" }} className="page-stack dashboard-page">
-        {error && <Alert type="error" message="加载失败" description={error} showIcon />}
         <Card loading={loading} />
       </Space>
     );
@@ -796,8 +794,6 @@ export default function DashboardPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack dashboard-page">
-      {error && <Alert type="error" message="请求失败" description={error} showIcon closable />}
-
       <div className="dashboard-kpi-grid page-section">
         <Card className="dashboard-kpi-card">
           <Typography.Text type="secondary" className="kpi-label">总资产 ({summary.base_currency})</Typography.Text>

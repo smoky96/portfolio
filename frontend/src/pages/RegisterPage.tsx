@@ -1,10 +1,11 @@
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, Typography } from "antd";
+import { Button, Card, Form, Input, Typography } from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { api } from "../api/client";
 import { AuthUser } from "../auth/session";
+import { showErrorModal, showSuccessModal } from "../utils/errorModal";
 
 interface RegisterFormValues {
   invite_code: string;
@@ -17,20 +18,16 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const [form] = Form.useForm<RegisterFormValues>();
   const [submitting, setSubmitting] = useState(false);
-  const [errorText, setErrorText] = useState("");
-  const [successText, setSuccessText] = useState("");
 
   async function handleSubmit(values: RegisterFormValues) {
     setSubmitting(true);
-    setErrorText("");
-    setSuccessText("");
     try {
       await api.post<AuthUser>("/auth/register", {
         invite_code: values.invite_code,
         username: values.username,
         password: values.password,
       });
-      setSuccessText("注册成功，请使用新账号登录。");
+      showSuccessModal("注册成功，请使用新账号登录。", { title: "注册成功" });
       setTimeout(() => {
         navigate("/login", {
           replace: true,
@@ -38,7 +35,7 @@ export default function RegisterPage() {
         });
       }, 600);
     } catch (err) {
-      setErrorText(String(err));
+      showErrorModal(err, { title: "注册失败" });
     } finally {
       setSubmitting(false);
     }
@@ -58,9 +55,6 @@ export default function RegisterPage() {
             通过邀请码注册后即可登录系统
           </Typography.Text>
         </div>
-
-        {errorText && <Alert type="error" showIcon message={errorText} style={{ marginBottom: 12 }} />}
-        {successText && <Alert type="success" showIcon message={successText} style={{ marginBottom: 12 }} />}
 
         <Form<RegisterFormValues> layout="vertical" form={form} onFinish={(values) => void handleSubmit(values)}>
           <Form.Item label="邀请码" name="invite_code" rules={[{ required: true, message: "请输入邀请码" }]}>

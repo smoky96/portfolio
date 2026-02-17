@@ -13,6 +13,12 @@ async function safeClick(locator: Locator) {
   await locator.click({ force: true });
 }
 
+async function expectAndCloseSuccessModal(page: Page, text: string) {
+  const modal = page.locator(".ant-modal-confirm-success").filter({ hasText: text }).last();
+  await expect(modal).toBeVisible({ timeout: 15000 });
+  await modal.getByRole("button", { name: /确\s*定/ }).click();
+}
+
 async function selectFormOption(page: Page, container: Locator, label: string, optionText: string) {
   const item = formItem(container, label);
   await expect(item).toBeVisible();
@@ -163,7 +169,7 @@ test.describe("Transactions interactions @transactions", () => {
     await formItem(manualCard, "价格").locator("input").first().fill("1.23");
     await safeClick(manualCard.getByRole("button", { name: "新增流水" }));
 
-    await expect(page.getByText("流水已创建")).toBeVisible();
+    await expectAndCloseSuccessModal(page, "流水已创建");
     await expect(page.locator(".ant-card").filter({ hasText: "流水明细" }).first()).toContainText(symbol);
   });
 

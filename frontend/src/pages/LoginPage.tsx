@@ -1,10 +1,11 @@
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Checkbox, Form, Input, Space, Typography } from "antd";
+import { Button, Card, Checkbox, Form, Input, Space, Typography } from "antd";
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { api } from "../api/client";
 import { AuthSession, getRememberedUsername, saveSession } from "../auth/session";
+import { showErrorModal } from "../utils/errorModal";
 
 interface LoginFormValues {
   username: string;
@@ -32,7 +33,6 @@ export default function LoginPage({ onLogin, allowSelfRegistration }: LoginPageP
   const location = useLocation();
   const [form] = Form.useForm<LoginFormValues>();
   const [submitting, setSubmitting] = useState(false);
-  const [errorText, setErrorText] = useState("");
 
   const locationState = (location.state as { from?: string; prefillUsername?: string } | null) ?? null;
   const rememberedUsername = locationState?.prefillUsername ?? getRememberedUsername();
@@ -44,7 +44,6 @@ export default function LoginPage({ onLogin, allowSelfRegistration }: LoginPageP
 
   async function handleSubmit(values: LoginFormValues) {
     setSubmitting(true);
-    setErrorText("");
     try {
       const session = await api.post<AuthSession>("/auth/login", {
         username: values.username,
@@ -55,7 +54,7 @@ export default function LoginPage({ onLogin, allowSelfRegistration }: LoginPageP
       const redirectPath = resolveRedirectPath(locationState?.from);
       navigate(redirectPath, { replace: true });
     } catch {
-      setErrorText("账号或密码错误，请重试。");
+      showErrorModal("账号或密码错误，请重试。", { title: "登录失败" });
     } finally {
       setSubmitting(false);
     }
@@ -75,8 +74,6 @@ export default function LoginPage({ onLogin, allowSelfRegistration }: LoginPageP
             登录后可继续管理资产配置、流水与持仓分析
           </Typography.Text>
         </div>
-
-        {errorText && <Alert type="error" showIcon message={errorText} />}
 
         <Form<LoginFormValues> layout="vertical" form={form} initialValues={defaultValues} onFinish={(values) => void handleSubmit(values)}>
           <Form.Item label="账号" name="username" rules={[{ required: true, message: "请输入账号" }]}>

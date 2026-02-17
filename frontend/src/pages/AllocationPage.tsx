@@ -26,6 +26,7 @@ import { api } from "../api/client";
 import { NODE_LEVEL_LABELS, NodeLevelLabel } from "../constants/labels";
 import { Account, AllocationNode, DashboardSummary, Holding, Instrument } from "../types";
 import { formatDecimal, formatPercent, isHundred, sumDecimals } from "../utils/format";
+import { showErrorModal, showSuccessModal } from "../utils/errorModal";
 
 interface NodeForm {
   create_mode: "ROOT" | "SIBLING" | "CHILD";
@@ -160,8 +161,6 @@ export default function AllocationPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountCashBalanceById, setAccountCashBalanceById] = useState<Record<number, number>>({});
-  const [error, setError] = useState("");
-  const [messageText, setMessageText] = useState("");
   const [loading, setLoading] = useState(false);
 
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
@@ -193,9 +192,8 @@ export default function AllocationPage() {
           summaryResp.account_balances.map((item) => [item.account_id, toNumber(item.base_cash_balance)])
         )
       );
-      setError("");
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err);
     } finally {
       setLoading(false);
     }
@@ -444,7 +442,7 @@ export default function AllocationPage() {
     }));
     const total = sumDecimals(payloadItems.map((item) => item.target_weight));
     if (!isHundred(total)) {
-      message.error(`同层节点权重之和必须为 100%，当前为 ${total.toFixed(3)}%`);
+      showErrorModal(`同层节点权重之和必须为 100%，当前为 ${total.toFixed(3)}%`, { title: "校验失败" });
       return;
     }
 
@@ -453,7 +451,7 @@ export default function AllocationPage() {
         parent_id: parentId,
         items: payloadItems
       });
-      setMessageText("同层节点权重已更新");
+      showSuccessModal("同层节点权重已更新");
       setNodeWeightDrafts((prev) => {
         const next = { ...prev };
         siblings.forEach((item) => delete next[item.id]);
@@ -461,7 +459,7 @@ export default function AllocationPage() {
       });
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "更新权重失败" });
     }
   }
 
@@ -474,10 +472,10 @@ export default function AllocationPage() {
       await api.patch(`/allocation/nodes/${selectedNode.id}`, {
         name: values.name
       });
-      setMessageText("节点名称已更新");
+      showSuccessModal("节点名称已更新");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "重命名节点失败" });
     }
   }
 
@@ -490,14 +488,14 @@ export default function AllocationPage() {
         name: values.name,
         target_weight: values.target_weight
       });
-      setMessageText("层级节点已创建");
+      showSuccessModal("层级节点已创建");
       nodeForm.resetFields(["name"]);
       nodeForm.setFieldValue("create_mode", mode);
       const siblings = getSiblingNodes(parentId);
       nodeForm.setFieldValue("target_weight", siblings.length === 0 ? 100 : 0);
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "创建节点失败" });
     }
   }
 
@@ -509,10 +507,10 @@ export default function AllocationPage() {
     try {
       await api.delete(`/allocation/nodes/${selectedNode.id}`);
       setSelectedNodeId(null);
-      setMessageText("层级节点已删除");
+      showSuccessModal("层级节点已删除");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "删除节点失败" });
     }
   }
 
@@ -542,10 +540,10 @@ export default function AllocationPage() {
         allocation_node_id: selectedNode.id
       });
       setLeafInstrumentDraftId(null);
-      setMessageText("持仓标的已添加到当前节点");
+      showSuccessModal("持仓标的已添加到当前节点");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "绑定标的失败" });
     } finally {
       setInstrumentSavingId(null);
     }
@@ -557,10 +555,10 @@ export default function AllocationPage() {
       await api.patch(`/instruments/${instrumentId}`, {
         allocation_node_id: null
       });
-      setMessageText("标的已从当前节点移除");
+      showSuccessModal("标的已从当前节点移除");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "移除标的失败" });
     } finally {
       setInstrumentSavingId(null);
     }
@@ -578,10 +576,10 @@ export default function AllocationPage() {
         allocation_node_id: selectedNode.id
       });
       setNodeAccountDraftId(null);
-      setMessageText("账户现金归属已更新");
+      showSuccessModal("账户现金归属已更新");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "绑定账户失败" });
     } finally {
       setAccountSavingId(null);
     }
@@ -593,10 +591,10 @@ export default function AllocationPage() {
       await api.patch(`/accounts/${accountId}`, {
         allocation_node_id: null
       });
-      setMessageText("账户已从当前层级移除");
+      showSuccessModal("账户已从当前层级移除");
       await load();
     } catch (err) {
-      setError(String(err));
+      showErrorModal(err, { title: "移除账户失败" });
     } finally {
       setAccountSavingId(null);
     }
@@ -836,9 +834,6 @@ export default function AllocationPage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack allocation-page">
-      {error && <Alert type="error" showIcon message="请求失败" description={error} closable />}
-      {messageText && <Alert type="success" showIcon message={messageText} closable />}
-
       <Row gutter={[16, 16]} className="page-section dashboard-chart-row allocation-chart-row">
         <Col xs={24} md={12} xl={8}>
           <Card title="目标资产结构（根节点）" className="dashboard-pie-card">
