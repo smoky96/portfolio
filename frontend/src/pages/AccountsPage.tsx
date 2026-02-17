@@ -1,17 +1,23 @@
-import { Alert, Button, Card, Form, Input, Select, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Popconfirm, Select, Space, Table, Tag, Typography } from "antd";
 import type { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
 import { ACCOUNT_TYPE_LABELS } from "../constants/labels";
-import { Account, DashboardSummary, Holding, ReturnCurvePoint } from "../types";
+import { Account, DashboardSummary, Holding, ReturnCurvePoint, Transaction } from "../types";
 import { formatDecimal } from "../utils/format";
 
 interface AccountForm {
   name: string;
   type: "CASH" | "BROKERAGE";
   base_currency: string;
+}
+
+interface AccountRow extends Account {
+  cash_balance: number;
+  holding_market_value: number;
+  total_balance: number;
 }
 
 export default function AccountsPage() {
@@ -26,6 +32,8 @@ export default function AccountsPage() {
 
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | "CASH" | "BROKERAGE">("ALL");
+  const [accountIdsWithTransactions, setAccountIdsWithTransactions] = useState<Set<number>>(new Set());
+  const [deletingAccountId, setDeletingAccountId] = useState<number | null>(null);
 
   const currencyOptions = useMemo(
     () => [
@@ -136,16 +144,18 @@ export default function AccountsPage() {
   async function load() {
     setLoading(true);
     try {
-      const [accountData, summaryData, holdingsData, curveData] = await Promise.all([
+      const [accountData, summaryData, holdingsData, curveData, txData] = await Promise.all([
         api.get<Account[]>("/accounts"),
         api.get<DashboardSummary>("/dashboard/summary"),
         api.get<Holding[]>("/holdings"),
-        api.get<ReturnCurvePoint[]>("/dashboard/returns-curve?days=180")
+        api.get<ReturnCurvePoint[]>("/dashboard/returns-curve?days=180"),
+        api.get<Array<Pick<Transaction, "account_id">>>("/transactions")
       ]);
       setAccounts(accountData);
       setSummary(summaryData);
       setHoldings(holdingsData);
       setCurve(curveData);
+      setAccountIdsWithTransactions(new Set(txData.map((item) => item.account_id)));
       setError("");
     } catch (err) {
       setError(String(err));
@@ -173,6 +183,24 @@ export default function AccountsPage() {
       await load();
     } catch (err) {
       setError(String(err));
+    }
+  }
+
+  async function onDelete(account: Account) {
+    if (accountIdsWithTransactions.has(account.id)) {
+      setError("该账户已有流水，不能删除");
+      return;
+    }
+    setDeletingAccountId(account.id);
+    try {
+      await api.delete<{ deleted: boolean; unbound_instruments: number }>(`/accounts/${account.id}`);
+      setMessage("账户已删除");
+      setError("");
+      await load();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setDeletingAccountId(null);
     }
   }
 
@@ -204,7 +232,7 @@ export default function AccountsPage() {
     return map;
   }, [holdings]);
 
-  const accountRows = useMemo(() => {
+  const accountRows = useMemo<AccountRow[]>(() => {
     return filteredAccounts.map((item) => {
       const cashBalance = cashBalanceMap.get(item.id) ?? 0;
       const holdingMarketValue = holdingMarketValueMap.get(item.id) ?? 0;
@@ -300,11 +328,11 @@ export default function AccountsPage() {
             清空筛选
           </Button>
         </div>
-        <Table
+        <Table<AccountRow>
           rowKey="id"
           loading={loading}
           pagination={{ pageSize: 10 }}
-          scroll={{ x: 760 }}
+          scroll={{ x: 980 }}
           dataSource={accountRows}
           columns={[
             { title: "账户名称", dataIndex: "name" },
@@ -315,9 +343,14 @@ export default function AccountsPage() {
             },
             { title: "币种", dataIndex: "base_currency" },
             {
+              title: "状态",
+              dataIndex: "is_active",
+              render: (value: boolean) => <Tag color={value ? "green" : "default"}>{value ? "启用" : "停用"}</Tag>
+            },
+            {
               title: `账户余额（${baseCurrency}）`,
               dataIndex: "total_balance",
-              render: (value: number, record: { cash_balance: number; holding_market_value: number }) => (
+              render: (value: number, record: AccountRow) => (
                 <Space direction="vertical" size={2}>
                   <Typography.Text strong>{formatDecimal(value)}</Typography.Text>
                   <Typography.Text type="secondary">
@@ -325,6 +358,31 @@ export default function AccountsPage() {
                   </Typography.Text>
                 </Space>
               )
+            },
+            {
+              title: "操作",
+              dataIndex: "actions",
+              render: (_: unknown, record: AccountRow) => {
+                const hasTransactions = accountIdsWithTransactions.has(record.id);
+                return (
+                <Space size={8}>
+                  <Popconfirm
+                    title={`确认删除账户「${record.name}」？`}
+                    description="仅当该账户没有流水记录时可删除。"
+                    okText="删除"
+                    cancelText="取消"
+                    okButtonProps={{ danger: true, loading: deletingAccountId === record.id }}
+                    disabled={hasTransactions}
+                    onConfirm={() => void onDelete(record)}
+                  >
+                    <Button size="small" danger loading={deletingAccountId === record.id} disabled={hasTransactions}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                  {hasTransactions ? <Typography.Text type="secondary">有流水不可删</Typography.Text> : null}
+                </Space>
+                );
+              }
             }
           ]}
         />
