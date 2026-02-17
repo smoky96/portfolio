@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 
+import pytest
 from fastapi import HTTPException
 
 from app.models import Transaction, TransactionType
@@ -25,17 +26,21 @@ def make_tx(tx_type: TransactionType, amount: str, quantity: str | None = None, 
     )
 
 
-def test_weight_sum_validation() -> None:
-    _validate_sum_to_hundred([Decimal("60"), Decimal("40")], "ok")
+@pytest.mark.parametrize(
+    ("weights", "scope", "expected_status"),
+    [
+        ([Decimal("60"), Decimal("40")], "ok", None),
+        ([Decimal("80"), Decimal("19")], "bad", 400),
+    ],
+)
+def test_weight_sum_validation(weights: list[Decimal], scope: str, expected_status: int | None) -> None:
+    if expected_status is None:
+        _validate_sum_to_hundred(weights, scope)
+        return
 
-
-def test_weight_sum_validation_fail() -> None:
-    try:
-        _validate_sum_to_hundred([Decimal("80"), Decimal("19")], "bad")
-    except HTTPException as exc:
-        assert exc.status_code == 400
-    else:
-        raise AssertionError("Expected HTTPException")
+    with pytest.raises(HTTPException) as exc_info:
+        _validate_sum_to_hundred(weights, scope)
+    assert exc_info.value.status_code == expected_status
 
 
 def test_moving_average_cost() -> None:

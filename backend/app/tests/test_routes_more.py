@@ -10,10 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     Account,
+    AccountTagSelection,
     AccountType,
+    AllocationTag,
+    AllocationTagGroup,
     AllocationNode,
     Instrument,
     InstrumentType,
+    PositionSnapshot,
 )
 
 
@@ -353,6 +357,151 @@ def test_account_routes_and_reference_validation(client):
     assert resp.status_code == 200
     assert resp.json()["allocation_node_id"] == leaf_id
 
+
+def test_account_delete_unbinds_instruments(client):
+    account_id = _create_account(client, name="删除测试账户", account_type="BROKERAGE")
+    root_id = _create_root_node(client, name="删除测试根节点")
+
+    instrument_resp = client.post(
+        "/api/v1/instruments",
+        json={
+            "symbol": "DEL-001",
+            "market": "CN",
+            "type": "STOCK",
+            "currency": "CNY",
+            "name": "删除测试标的",
+            "default_account_id": account_id,
+            "allocation_node_id": root_id,
+        },
+    )
+    assert instrument_resp.status_code == 200
+    instrument_id = instrument_resp.json()["id"]
+
+    delete_resp = client.delete(f"/api/v1/accounts/{account_id}")
+    assert delete_resp.status_code == 200
+    payload = delete_resp.json()
+    assert payload["deleted"] is True
+    assert payload["unbound_instruments"] == 1
+
+    accounts_resp = client.get("/api/v1/accounts")
+    assert accounts_resp.status_code == 200
+    account_ids = {item["id"] for item in accounts_resp.json()}
+    assert account_id not in account_ids
+
+    instruments_resp = client.get("/api/v1/instruments")
+    assert instruments_resp.status_code == 200
+    instrument = next(item for item in instruments_resp.json() if item["id"] == instrument_id)
+    assert instrument["default_account_id"] is None
+
+
+def test_account_delete_cleans_related_account_state(client, db_session: Session):
+    account_id = _create_account(client, name="删除清理账户", account_type="BROKERAGE")
+    root_id = _create_root_node(client, name="删除清理根节点")
+
+    instrument_resp = client.post(
+        "/api/v1/instruments",
+        json={
+            "symbol": "DEL-002",
+            "market": "CN",
+            "type": "STOCK",
+            "currency": "CNY",
+            "name": "删除清理标的",
+            "default_account_id": account_id,
+            "allocation_node_id": root_id,
+        },
+    )
+    assert instrument_resp.status_code == 200
+    instrument_id = instrument_resp.json()["id"]
+
+    tag_group = AllocationTagGroup(owner_id=1, name="删除清理标签组", order_index=0)
+    db_session.add(tag_group)
+    db_session.flush()
+    tag = AllocationTag(owner_id=1, group_id=tag_group.id, name="删除清理标签", order_index=0)
+    db_session.add(tag)
+    db_session.flush()
+
+    db_session.add(
+        AccountTagSelection(
+            owner_id=1,
+            account_id=account_id,
+            group_id=tag_group.id,
+            tag_id=tag.id,
+        )
+    )
+    db_session.add(
+        PositionSnapshot(
+            owner_id=1,
+            account_id=account_id,
+            instrument_id=instrument_id,
+            quantity=Decimal("1"),
+            avg_cost=Decimal("100"),
+        )
+    )
+    db_session.commit()
+
+    assert db_session.scalar(
+        select(AccountTagSelection.id).where(
+            AccountTagSelection.owner_id == 1,
+            AccountTagSelection.account_id == account_id,
+        )
+    )
+    assert db_session.scalar(
+        select(PositionSnapshot.id).where(
+            PositionSnapshot.owner_id == 1,
+            PositionSnapshot.account_id == account_id,
+        )
+    )
+
+    delete_resp = client.delete(f"/api/v1/accounts/{account_id}")
+    assert delete_resp.status_code == 200
+    assert delete_resp.json()["deleted"] is True
+
+    assert (
+        db_session.scalar(
+            select(AccountTagSelection.id).where(
+                AccountTagSelection.owner_id == 1,
+                AccountTagSelection.account_id == account_id,
+            )
+        )
+        is None
+    )
+    assert (
+        db_session.scalar(
+            select(PositionSnapshot.id).where(
+                PositionSnapshot.owner_id == 1,
+                PositionSnapshot.account_id == account_id,
+            )
+        )
+        is None
+    )
+
+
+def test_account_delete_rejects_when_transactions_exist(client):
+    account_id = _create_account(client, name="不可删账户", account_type="CASH")
+    now = datetime.now(timezone.utc).isoformat()
+
+    funding_resp = client.post(
+        "/api/v1/transactions",
+        json={
+            "type": "CASH_IN",
+            "account_id": account_id,
+            "amount": "1000",
+            "fee": "0",
+            "tax": "0",
+            "currency": "CNY",
+            "executed_at": now,
+            "executed_tz": "Asia/Shanghai",
+            "note": "删除校验",
+        },
+    )
+    assert funding_resp.status_code == 200
+
+    delete_resp = client.delete(f"/api/v1/accounts/{account_id}")
+    assert delete_resp.status_code == 400
+    assert delete_resp.json()["detail"] == "Account has transactions; delete related transactions first"
+
+    missing_resp = client.delete("/api/v1/accounts/9999")
+    assert missing_resp.status_code == 404
 
 def test_transactions_update_delete_and_reverse(client):
     account_id = _create_account(client, name="交易账户", account_type="BROKERAGE")
@@ -970,6 +1119,19 @@ async def test_quotes_lookup_route(client, monkeypatch):
     assert data["found"] is False
     assert data["provider_status"] == "failed"
     assert "upstream timeout" in data["message"]
+
+    async def fake_lookup_quote_rate_limited(self, symbol):
+        raise RuntimeError("provider 429 too many requests")
+
+    monkeypatch.setattr("app.api.routes.quotes.YahooQuoteAdapter.lookup_quote", fake_lookup_quote_rate_limited)
+    resp = client.get("/api/v1/quotes/lookup?symbol=429")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["symbol"] == "429"
+    assert data["matched_symbol"] is None
+    assert data["found"] is False
+    assert data["provider_status"] == "rate_limited"
+    assert "429" in data["message"]
 
 
 @pytest.mark.asyncio
