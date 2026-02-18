@@ -1,0 +1,14 @@
+.surfaceCard :global(.ant-card-head) {
+  border-bottom-color: var(--line-color);
+  background: linear-gradient(180deg, rgba(38, 67, 110, 0.42) 0%, rgba(18, 35, 63, 0.68) 100%);
+}
+
+.surfaceCard :global(.ant-card-head-title) {
+  color: var(--text-main);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.toneSoft {
+  background: linear-gradient(180deg, rgba(25, 48, 84, 0.86) 0%, rgba(18, 35, 63, 0.92) 100%);
+}

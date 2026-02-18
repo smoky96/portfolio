@@ -2,20 +2,20 @@ import {
   AppstoreOutlined,
   BankOutlined,
   DollarOutlined,
-  LogoutOutlined,
-  MenuOutlined,
   PieChartOutlined,
   SafetyCertificateOutlined,
   SwapOutlined,
   TagOutlined,
   TagsOutlined
 } from "@ant-design/icons";
-import { Button, Drawer, Grid, Layout, Space, Tag, Typography } from "antd";
+import { Grid, Space } from "antd";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { api } from "./api/client";
 import { AuthSession, AuthUser, clearSession, getStoredSession, onAuthExpired } from "./auth/session";
+import { AppShell } from "./components/ui";
+import { UI_VERSION } from "./design/featureFlags";
 import AccountsPage from "./pages/AccountsPage";
 import AllocationPage from "./pages/AllocationPage";
 import LoginPage from "./pages/LoginPage";
@@ -26,8 +26,6 @@ import CustomInstrumentsPage from "./pages/CustomInstrumentsPage";
 import TagGroupsPage from "./pages/TagGroupsPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import RegisterPage from "./pages/RegisterPage";
-
-const { Header, Sider, Content } = Layout;
 
 interface RouteMeta {
   title: string;
@@ -179,109 +177,38 @@ export default function App() {
     navigate("/login", { replace: true });
   }
 
-  function renderNav(onNavigate?: () => void) {
-    return (
-      <nav className="side-nav" aria-label="主导航">
-        {navItems.map((item) => {
-          const active = selectedKey === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              className={`side-nav-item${active ? " is-active" : ""}`}
-              onClick={() => {
-                navigate(item.key);
-                onNavigate?.();
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </nav>
-    );
-  }
-
   return (
-    <Layout className="app-layout">
-      {!isMobile && (
-        <Sider width={240} breakpoint="lg" collapsedWidth="0" className="app-sider">
-          <div className="brand-wrap">
-            <Typography.Text className="brand-chip">PORTFOLIO ATLAS</Typography.Text>
-            <Typography.Title level={4} className="brand-title">
-              投资组合管理
-            </Typography.Title>
-            <Typography.Text className="brand-subtitle">配置 · 交易 · 持仓 · 归因</Typography.Text>
-          </div>
-          {renderNav()}
-          <div className="sider-foot">
-            <Tag color="blue">记账本位币 CNY</Tag>
-            <Tag color="geekblue">时区 Asia/Shanghai</Tag>
-          </div>
-        </Sider>
-      )}
-      <Layout>
-        <Header className="app-header">
-          <div className="header-main">
-            {isMobile && (
-              <Button
-                type="text"
-                icon={<MenuOutlined />}
-                onClick={() => setMobileNavOpen(true)}
-                aria-label="打开导航菜单"
-                className="mobile-menu-btn"
-              />
-            )}
-            <Typography.Title level={3} className="page-title">
-              {routeMeta.title}
-            </Typography.Title>
-            <Typography.Text type="secondary" className="page-subtitle">
-              {routeMeta.subtitle}
-            </Typography.Text>
-          </div>
-          <Space size={8} className="header-actions">
-            <Tag color="default" className="header-meta-tag">
-              更新时间 {nowText}
-            </Tag>
-            <Tag color="blue" className="header-user-tag">
-              {session.user.username}
-            </Tag>
-                <Button size={isMobile ? "small" : "middle"} icon={<LogoutOutlined />} onClick={() => void handleLogout()}>
-                  {isMobile ? "退出" : "退出登录"}
-                </Button>
-              </Space>
-        </Header>
-        <Content className="app-content">
-          <Routes>
-            <Route path="/login" element={<Navigate to="/" replace />} />
-            <Route path="/register" element={<Navigate to={allowSelfRegistration ? "/login" : "/"} replace />} />
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/allocation" element={<AllocationPage />} />
-            <Route path="/tags" element={<TagGroupsPage />} />
-            <Route path="/accounts" element={<AccountsPage />} />
-            <Route path="/instruments" element={<Navigate to="/holdings" replace />} />
-            <Route path="/transactions" element={<TransactionsPage />} />
-            <Route path="/holdings" element={<HoldingsPage />} />
-            <Route path="/custom-instruments" element={<CustomInstrumentsPage />} />
-            <Route path="/admin/users" element={session.user.role === "ADMIN" ? <AdminUsersPage /> : <Navigate to="/" replace />} />
-            <Route path="/quotes" element={<Navigate to="/custom-instruments" replace />} />
-          </Routes>
-        </Content>
-      </Layout>
-      <Drawer
-        title="导航"
-        placement="left"
-        open={isMobile && mobileNavOpen}
-        onClose={() => setMobileNavOpen(false)}
-        width={280}
-        className="app-drawer"
-      >
-        {renderNav(() => setMobileNavOpen(false))}
-        <div className="drawer-foot">
-          <Tag color="blue">记账本位币 CNY</Tag>
-          <Tag color="geekblue">时区 Asia/Shanghai</Tag>
-        </div>
-      </Drawer>
-    </Layout>
+    <AppShell
+      version={UI_VERSION}
+      isMobile={isMobile}
+      selectedKey={selectedKey}
+      title={routeMeta.title}
+      subtitle={routeMeta.subtitle}
+      username={session.user.username}
+      nowText={nowText}
+      navItems={navItems}
+      onNavigate={(key) => navigate(key)}
+      onLogout={() => {
+        void handleLogout();
+      }}
+      mobileNavOpen={mobileNavOpen}
+      onOpenMobileNav={() => setMobileNavOpen(true)}
+      onCloseMobileNav={() => setMobileNavOpen(false)}
+    >
+      <Routes>
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/register" element={<Navigate to={allowSelfRegistration ? "/login" : "/"} replace />} />
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/allocation" element={<AllocationPage />} />
+        <Route path="/tags" element={<TagGroupsPage />} />
+        <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/instruments" element={<Navigate to="/holdings" replace />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/holdings" element={<HoldingsPage />} />
+        <Route path="/custom-instruments" element={<CustomInstrumentsPage />} />
+        <Route path="/admin/users" element={session.user.role === "ADMIN" ? <AdminUsersPage /> : <Navigate to="/" replace />} />
+        <Route path="/quotes" element={<Navigate to="/custom-instruments" replace />} />
+      </Routes>
+    </AppShell>
   );
 }

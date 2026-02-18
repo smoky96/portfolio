@@ -1,0 +1,38 @@
+@keyframes ui-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-section {
+  animation: ui-rise var(--motion-smooth) var(--motion-easing) both;
+}
+
+.page-stack > .page-section:nth-of-type(2) {
+  animation-delay: 40ms;
+}
+
+.page-stack > .page-section:nth-of-type(3) {
+  animation-delay: 80ms;
+}
+
+.page-stack > .page-section:nth-of-type(4) {
+  animation-delay: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

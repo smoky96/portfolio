@@ -1,0 +1,37 @@
+.pageStack {
+  width: 100%;
+}
+
+.valueTitle {
+  margin-top: 8px !important;
+}
+
+.metricPositive {
+  color: var(--success) !important;
+}
+
+.metricNegative {
+  color: var(--danger) !important;
+}
+
+.metricWarning {
+  color: var(--warning) !important;
+}
+
+.metricInfo {
+  color: var(--info) !important;
+}
+
+.contribStack {
+  width: 136px;
+}
+
+.exposureValue {
+  margin-top: 8px !important;
+  margin-bottom: 4px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.exposureProgress {
+  margin-top: 8px;
+}

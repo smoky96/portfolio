@@ -1,0 +1,218 @@
+.appRoot {
+  min-height: 100vh;
+  background: var(--bg-base);
+}
+
+.appLayout {
+  min-height: 100vh;
+  align-items: flex-start;
+}
+
+.appSider {
+  position: sticky !important;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--line-color);
+  background: linear-gradient(160deg, #101f39 0%, #132643 55%, #111f38 100%) !important;
+  box-shadow: var(--shadow-soft);
+}
+
+.brandWrap {
+  padding: 20px 18px 12px;
+}
+
+.brandChip {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(84, 157, 255, 0.5);
+  background: rgba(35, 78, 142, 0.58);
+  color: #d9e9ff;
+  font-size: 11px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+}
+
+.brandTitle {
+  margin: 8px 0 0 !important;
+  color: #eff5ff !important;
+  font-family: var(--font-display);
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+.brandSubtitle {
+  color: var(--text-sub) !important;
+  font-size: 12px;
+}
+
+.sideNav {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  gap: 6px;
+}
+
+.sideNavItem {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(224, 236, 253, 0.88);
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-base) var(--motion-easing);
+}
+
+.sideNavItem:hover {
+  background: rgba(46, 93, 169, 0.34);
+  border-color: rgba(95, 145, 226, 0.36);
+  transform: translateX(2px);
+}
+
+.sideNavItemActive {
+  color: #ffffff;
+  border-color: rgba(122, 176, 255, 0.58);
+  background: linear-gradient(118deg, #2f6cd2 0%, #3a87f2 100%);
+  box-shadow: 0 12px 24px rgba(8, 26, 57, 0.45);
+}
+
+.siderFoot {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid rgba(70, 101, 149, 0.5);
+}
+
+.mainLayout {
+  min-height: 100vh;
+}
+
+.appHeader {
+  position: sticky;
+  top: 0;
+  z-index: 11;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 86px;
+  padding: 16px 18px 12px;
+  background: rgba(12, 23, 42, 0.86);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line-color);
+}
+
+.headerMain {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mobileMenuBtn {
+  width: 36px;
+  height: 36px;
+  color: var(--text-main);
+  margin-left: -8px;
+}
+
+.pageTitle {
+  margin: 0 !important;
+  color: var(--text-main) !important;
+  font-family: var(--font-display);
+  font-size: 29px !important;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+}
+
+.pageSubtitle {
+  color: var(--text-sub) !important;
+  font-size: 13px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.logoutButton {
+  border-radius: 10px;
+}
+
+.appContent {
+  width: 100%;
+  max-width: 1640px;
+  margin: 0 auto;
+  padding: 22px clamp(12px, 1.8vw, 26px) 28px;
+}
+
+.appDrawer :global(.ant-drawer-header) {
+  border-bottom-color: var(--line-color);
+  background: #132643;
+}
+
+.appDrawer :global(.ant-drawer-title) {
+  color: var(--text-main);
+}
+
+.appDrawer :global(.ant-drawer-body) {
+  background: #12233f;
+}
+
+.drawerFoot {
+  margin-top: 16px;
+  border-top: 1px solid var(--line-color);
+  padding-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 992px) {
+  .appHeader {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 14px;
+    min-height: 80px;
+  }
+
+  .pageTitle {
+    font-size: 22px !important;
+    line-height: 1.15;
+  }
+
+  .appContent {
+    padding: 14px;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .headerActions button:last-child {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .appContent {
+    padding: 12px 10px 18px;
+  }
+
+  .pageSubtitle {
+    display: none;
+  }
+}

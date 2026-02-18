@@ -1,0 +1,44 @@
+:root {
+  --bg-base: #0f172a;
+  --bg-canvas: #111c33;
+  --surface: #12233f;
+  --surface-soft: #172b4c;
+  --line-color: #2d4368;
+  --line-strong: #3a5a89;
+  --text-main: #e6eefb;
+  --text-sub: #9cb3d6;
+  --text-faint: #7f95b9;
+  --primary: #3d86ff;
+  --primary-strong: #2d6fda;
+  --primary-soft: #1a3560;
+  --success: #3bb273;
+  --warning: #f2a93b;
+  --danger: #f06565;
+  --info: #57b2ff;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --shadow-soft: 0 10px 28px rgba(6, 10, 20, 0.32);
+  --shadow-strong: 0 20px 44px rgba(5, 10, 20, 0.42);
+
+  --font-body: "Manrope", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-display: "Archivo", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", "Consolas", monospace;
+
+  --motion-quick: 140ms;
+  --motion-base: 220ms;
+  --motion-smooth: 380ms;
+  --motion-easing: cubic-bezier(0.22, 1, 0.36, 1);
+}

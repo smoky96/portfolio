@@ -1,6 +1,5 @@
 import {
   Button,
-  Card,
   Form,
   Input,
   InputNumber,
@@ -9,7 +8,6 @@ import {
   Select,
   Space,
   Table,
-  Tag,
   Tooltip,
   Typography,
   Upload
@@ -18,10 +16,12 @@ import type { UploadFile } from "antd/es/upload/interface";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "../api/client";
+import { Stack, StatusPill, SurfaceCard } from "../components/ui";
 import { TRANSACTION_TYPE_LABELS, TRANSACTION_TYPE_OPTIONS } from "../constants/labels";
 import { Account, Instrument, LatestQuote, Transaction, YahooLookupQuote } from "../types";
 import { formatDecimal } from "../utils/format";
 import { showErrorModal, showSuccessModal } from "../utils/errorModal";
+import styles from "./TransactionsPage.module.css";
 
 interface TransactionForm {
   type: string;
@@ -57,24 +57,24 @@ const CURRENCY_OPTIONS = [
   { value: "SGD", label: "SGD - 新加坡元" }
 ] as const;
 
-const CURRENCY_COLOR_MAP: Record<string, string> = {
-  CNY: "blue",
-  USD: "green",
-  HKD: "purple",
-  EUR: "gold",
-  GBP: "magenta",
-  JPY: "volcano",
-  SGD: "cyan"
+const CURRENCY_TONE_MAP: Record<string, "default" | "info" | "positive" | "negative" | "warning"> = {
+  CNY: "info",
+  USD: "positive",
+  HKD: "default",
+  EUR: "warning",
+  GBP: "default",
+  JPY: "warning",
+  SGD: "info"
 };
 
-const TYPE_COLOR_MAP: Record<string, string> = {
-  BUY: "green",
-  SELL: "volcano",
-  DIVIDEND: "cyan",
-  FEE: "red",
-  CASH_IN: "blue",
-  CASH_OUT: "orange",
-  INTERNAL_TRANSFER: "purple"
+const TYPE_TONE_MAP: Record<string, "default" | "info" | "positive" | "negative" | "warning"> = {
+  BUY: "positive",
+  SELL: "negative",
+  DIVIDEND: "info",
+  FEE: "negative",
+  CASH_IN: "info",
+  CASH_OUT: "warning",
+  INTERNAL_TRANSFER: "default"
 };
 
 const CSV_TEMPLATE = `type,account_id,instrument_id,counterparty_account_id,quantity,price,amount,fee,tax,currency,executed_at,executed_tz,note
@@ -176,12 +176,12 @@ function round8(value: number): number {
   return Number(value.toFixed(8));
 }
 
-function getTypeColor(type: string): string {
-  return TYPE_COLOR_MAP[type] ?? "default";
+function getTypeTone(type: string): "default" | "info" | "positive" | "negative" | "warning" {
+  return TYPE_TONE_MAP[type] ?? "default";
 }
 
-function getCurrencyColor(currency: string): string {
-  return CURRENCY_COLOR_MAP[currency.toUpperCase()] ?? "default";
+function getCurrencyTone(currency: string): "default" | "info" | "positive" | "negative" | "warning" {
+  return CURRENCY_TONE_MAP[currency.toUpperCase()] ?? "default";
 }
 
 function resolveInstrumentTypeFromQuote(quoteType: string | null | undefined): "STOCK" | "FUND" {
@@ -877,41 +877,41 @@ export default function TransactionsPage() {
   const transferCount = new Set(txs.filter((item) => item.transfer_group_id).map((item) => item.transfer_group_id)).size;
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack transactions-page">
+    <Stack className={`page-stack transactions-page ${styles.pageStack}`}>
       <div className="page-grid page-section transactions-kpi-grid">
-        <Card className="transactions-kpi-card">
+        <SurfaceCard className="transactions-kpi-card">
           <Typography.Text type="secondary">流水总笔数</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8 }}>
+          <Typography.Title level={3} className={styles.valueTitle}>
             {formatDecimal(txs.length)}
           </Typography.Title>
-        </Card>
-        <Card className="transactions-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="transactions-kpi-card">
           <Typography.Text type="secondary">买入 / 卖出</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8 }}>
+          <Typography.Title level={3} className={styles.valueTitle}>
             {formatDecimal(txs.filter((item) => item.type === "BUY").length)} / {formatDecimal(txs.filter((item) => item.type === "SELL").length)}
           </Typography.Title>
-        </Card>
-        <Card className="transactions-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="transactions-kpi-card">
           <Typography.Text type="secondary">内部转账</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8 }}>
+          <Typography.Title level={3} className={styles.valueTitle}>
             {formatDecimal(transferCount)}
           </Typography.Title>
-        </Card>
-        <Card className="transactions-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="transactions-kpi-card">
           <Typography.Text type="secondary">现金净流入</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8, color: "#1f4f94" }}>
+          <Typography.Title level={3} className={`${styles.valueTitle} ${styles.metricPositive}`}>
             {formatDecimal(netCashInflow)}
           </Typography.Title>
-        </Card>
-        <Card className="transactions-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="transactions-kpi-card">
           <Typography.Text type="secondary">现金净流出</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8, color: "#d9363e" }}>
+          <Typography.Title level={3} className={`${styles.valueTitle} ${styles.metricNegative}`}>
             {formatDecimal(netCashOutflow)}
           </Typography.Title>
-        </Card>
+        </SurfaceCard>
       </div>
 
-      <Card className="page-section transactions-form-card" title="手工录入流水">
+      <SurfaceCard className="page-section transactions-form-card" title="手工录入流水">
         <Form<TransactionForm> layout="vertical" form={form} onFinish={(values) => void onCreate(values)}>
           <div className="page-grid">
             <Form.Item label="流水类型" name="type" rules={[{ required: true, message: "请选择流水类型" }]}>
@@ -976,25 +976,25 @@ export default function TransactionsPage() {
 
             {isCreateTradeType && (
               <Form.Item label="数量" name="quantity" rules={[{ required: true, message: "请输入数量" }]}>
-                <InputNumber min={0.00000001} precision={8} style={{ width: "100%" }} />
+                <InputNumber min={0.00000001} precision={8} className={styles.inputNumberFull} />
               </Form.Item>
             )}
 
             {isCreateTradeType && (
               <Form.Item label="价格" name="price" rules={[{ required: true, message: "请输入价格" }]}>
-                <InputNumber min={0.00000001} precision={8} style={{ width: "100%" }} />
+                <InputNumber min={0.00000001} precision={8} className={styles.inputNumberFull} />
               </Form.Item>
             )}
 
             {isCreateTradeType && (
               <Form.Item label="费用" name="fee">
-                <InputNumber min={0} precision={8} style={{ width: "100%" }} />
+                <InputNumber min={0} precision={8} className={styles.inputNumberFull} />
               </Form.Item>
             )}
 
             {isCreateTradeType && (
               <Form.Item label="税费" name="tax">
-                <InputNumber min={0} precision={8} style={{ width: "100%" }} />
+                <InputNumber min={0} precision={8} className={styles.inputNumberFull} />
               </Form.Item>
             )}
 
@@ -1003,7 +1003,7 @@ export default function TransactionsPage() {
               name="amount"
               rules={!isCreateTradeType ? [{ required: true, message: "请输入金额" }] : undefined}
             >
-              <InputNumber min={0.00000001} precision={8} style={{ width: "100%" }} disabled={isCreateTradeType} />
+              <InputNumber min={0.00000001} precision={8} className={styles.inputNumberFull} disabled={isCreateTradeType} />
             </Form.Item>
 
             <Form.Item label="币种" name="currency" rules={[{ required: true, message: "请选择币种" }]}>
@@ -1029,7 +1029,7 @@ export default function TransactionsPage() {
             </Typography.Text>
           )}
 
-          <Space style={{ marginTop: 12 }}>
+          <Space className={styles.actionRow}>
             <Button type="primary" htmlType="submit" loading={loading}>
               新增流水
             </Button>
@@ -1038,9 +1038,9 @@ export default function TransactionsPage() {
             </Button>
           </Space>
         </Form>
-      </Card>
+      </SurfaceCard>
 
-      <Card className="page-section transactions-import-card" title="CSV 批量导入" extra={<Button onClick={downloadCsvTemplate}>下载 CSV 模板</Button>}>
+      <SurfaceCard className="page-section transactions-import-card" title="CSV 批量导入" extra={<Button onClick={downloadCsvTemplate}>下载 CSV 模板</Button>}>
         <Space>
           <Upload
             accept=".csv"
@@ -1060,34 +1060,34 @@ export default function TransactionsPage() {
             导入
           </Button>
         </Space>
-      </Card>
+      </SurfaceCard>
 
-      <Card className="page-section transactions-table-card" title="流水明细">
+      <SurfaceCard className="page-section transactions-table-card" title="流水明细">
         <div className="page-toolbar transactions-toolbar">
           <Input
             placeholder="按类型/账户/标的/币种/备注搜索"
             value={keyword}
             onChange={(event) => setKeyword(event.target.value)}
             allowClear
-            style={{ maxWidth: 280 }}
+            className={styles.toolbarKeyword}
           />
           <Select
             value={typeFilter}
             onChange={(value) => setTypeFilter(value)}
             options={[{ value: "ALL", label: "全部类型" }, ...TRANSACTION_TYPE_OPTIONS.map((item) => ({ value: item.value, label: item.label }))]}
-            style={{ width: 180 }}
+            className={styles.toolbarType}
           />
           <Select
             value={accountFilter}
             onChange={(value) => setAccountFilter(value)}
             options={[{ value: "ALL", label: "全部账户" }, ...accounts.map((item) => ({ value: String(item.id), label: item.name }))]}
-            style={{ width: 180 }}
+            className={styles.toolbarAccount}
           />
           <Select
             value={instrumentFilter}
             onChange={(value) => setInstrumentFilter(value)}
             options={[{ value: "ALL", label: "全部标的" }, ...instruments.map((item) => ({ value: String(item.id), label: `${item.symbol} ${item.name}` }))]}
-            style={{ width: 220 }}
+            className={styles.toolbarInstrument}
             showSearch
             optionFilterProp="label"
           />
@@ -1095,7 +1095,7 @@ export default function TransactionsPage() {
             value={currencyFilter}
             onChange={(value) => setCurrencyFilter(value)}
             options={[{ value: "ALL", label: "全部币种" }, ...CURRENCY_OPTIONS.map((item) => ({ value: item.value, label: item.value }))]}
-            style={{ width: 140 }}
+            className={styles.toolbarCurrency}
           />
           <Button
             onClick={() => {
@@ -1121,7 +1121,7 @@ export default function TransactionsPage() {
               title: "类型",
               dataIndex: "type",
               width: 130,
-              render: (value: string) => <Tag color={getTypeColor(value)}>{TRANSACTION_TYPE_LABELS[value] ?? value}</Tag>
+              render: (value: string) => <StatusPill tone={getTypeTone(value)}>{TRANSACTION_TYPE_LABELS[value] ?? value}</StatusPill>
             },
             {
               title: "账户",
@@ -1169,7 +1169,7 @@ export default function TransactionsPage() {
               title: "币种",
               dataIndex: "currency",
               width: 100,
-              render: (value: string) => <Tag color={getCurrencyColor(value)}>{value}</Tag>
+              render: (value: string) => <StatusPill tone={getCurrencyTone(value)}>{value}</StatusPill>
             },
             {
               title: "执行时间（UTC+8）",
@@ -1237,7 +1237,7 @@ export default function TransactionsPage() {
             }
           ]}
         />
-      </Card>
+      </SurfaceCard>
 
       <Modal
         title="编辑流水"
@@ -1266,19 +1266,19 @@ export default function TransactionsPage() {
               <Select allowClear options={instruments.map((item) => ({ value: item.id, label: `${item.symbol} ${item.name}` }))} />
             </Form.Item>
             <Form.Item label="数量" name="quantity">
-              <InputNumber min={0} precision={8} style={{ width: "100%" }} />
+              <InputNumber min={0} precision={8} className={styles.inputNumberFull} />
             </Form.Item>
             <Form.Item label="价格" name="price">
-              <InputNumber min={0} precision={8} style={{ width: "100%" }} />
+              <InputNumber min={0} precision={8} className={styles.inputNumberFull} />
             </Form.Item>
             <Form.Item label={isEditTradeType ? "成交金额（自动）" : "金额"} name="amount" rules={[{ required: true, message: "请输入金额" }]}>
-              <InputNumber min={0.00000001} precision={8} style={{ width: "100%" }} disabled={isEditTradeType} />
+              <InputNumber min={0.00000001} precision={8} className={styles.inputNumberFull} disabled={isEditTradeType} />
             </Form.Item>
             <Form.Item label="费用" name="fee">
-              <InputNumber min={0} precision={8} style={{ width: "100%" }} />
+              <InputNumber min={0} precision={8} className={styles.inputNumberFull} />
             </Form.Item>
             <Form.Item label="税费" name="tax">
-              <InputNumber min={0} precision={8} style={{ width: "100%" }} />
+              <InputNumber min={0} precision={8} className={styles.inputNumberFull} />
             </Form.Item>
             <Form.Item label="币种" name="currency" rules={[{ required: true, message: "请选择币种" }]}>
               <Select options={CURRENCY_OPTIONS.map((item) => ({ ...item }))} showSearch optionFilterProp="label" />
@@ -1292,6 +1292,6 @@ export default function TransactionsPage() {
           </div>
         </Form>
       </Modal>
-    </Space>
+    </Stack>
   );
 }

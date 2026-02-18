@@ -1,0 +1,36 @@
+.pill {
+  border-radius: 999px;
+  margin-inline-end: 0;
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+
+.default {
+  background: rgba(48, 72, 113, 0.66);
+  color: var(--text-main);
+  border-color: rgba(100, 130, 176, 0.48);
+}
+
+.info {
+  background: rgba(49, 124, 224, 0.26);
+  color: #d8e8ff;
+  border-color: rgba(84, 157, 255, 0.45);
+}
+
+.positive {
+  background: rgba(39, 139, 88, 0.24);
+  color: #d3f3df;
+  border-color: rgba(79, 189, 126, 0.44);
+}
+
+.negative {
+  background: rgba(164, 50, 72, 0.28);
+  color: #ffdbe0;
+  border-color: rgba(228, 92, 120, 0.46);
+}
+
+.warning {
+  background: rgba(171, 124, 37, 0.26);
+  color: #ffefcf;
+  border-color: rgba(234, 174, 66, 0.46);
+}

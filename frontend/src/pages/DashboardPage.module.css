@@ -1,0 +1,40 @@
+.pageStack {
+  width: 100%;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.metricPositive {
+  color: var(--success) !important;
+}
+
+.metricNegative {
+  color: var(--danger) !important;
+}
+
+.selectCurve {
+  width: 140px;
+}
+
+.selectAsset {
+  width: 180px;
+}
+
+.selectTag {
+  width: 160px;
+}
+
+.snapshotStack {
+  width: 100%;
+}
+
+.snapshotList {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.legendContainer {
+  width: 100%;
+}

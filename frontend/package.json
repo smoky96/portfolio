@@ -12,6 +12,8 @@
     "test:e2e:allocation": "playwright test e2e/allocation.spec.ts",
     "test:e2e:transactions": "playwright test e2e/transactions.spec.ts",
     "test:e2e:holdings": "playwright test e2e/holdings.spec.ts",
+    "test:e2e:visual": "playwright test e2e/visual/first-screen.spec.ts --project=chromium",
+    "test:e2e:visual:update": "playwright test e2e/visual/first-screen.spec.ts --project=chromium --update-snapshots",
     "test:e2e:regression": "npm run test:e2e:smoke && npm run test:e2e:accounts && npm run test:e2e:allocation && npm run test:e2e:holdings && npm run test:e2e:transactions",
     "test:e2e": "npm run test:e2e:regression",
     "test:e2e:mobile": "playwright test --grep @mobile --project mobile-chromium"

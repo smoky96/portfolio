@@ -1,6 +1,5 @@
 import {
   Button,
-  Card,
   Col,
   Grid,
   Input,
@@ -8,18 +7,18 @@ import {
   Row,
   Segmented,
   Select,
-  Space,
   Table,
-  Tag,
   Typography
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
+import { Stack, StatusPill, SurfaceCard } from "../components/ui";
 import { Account, DriftItem, Holding } from "../types";
 import { formatDecimal, formatPercent } from "../utils/format";
 import { showErrorModal } from "../utils/errorModal";
+import styles from "./HoldingsPage.module.css";
 
 type PnlFilter = "ALL" | "POSITIVE" | "NEGATIVE";
 type DriftFilter = "ALL" | "ALERT_ONLY" | "NORMAL_ONLY";
@@ -196,7 +195,7 @@ export default function HoldingsPage() {
       align: "right",
       render: (value: string) => {
         const num = toNumber(value);
-        return <Typography.Text style={{ color: num >= 0 ? "#1677ff" : "#ff4d4f" }}>{formatDecimal(value)}</Typography.Text>;
+        return <Typography.Text className={num >= 0 ? styles.metricPositive : styles.metricNegative}>{formatDecimal(value)}</Typography.Text>;
       },
       sorter: (a, b) => toNumber(a.unrealized_pnl) - toNumber(b.unrealized_pnl)
     },
@@ -208,7 +207,7 @@ export default function HoldingsPage() {
       render: (_, row: Holding) => {
         const cost = toNumber(row.cost_value);
         const rate = cost > 0 ? (toNumber(row.unrealized_pnl) / cost) * 100 : 0;
-        return <Typography.Text style={{ color: rate >= 0 ? "#1677ff" : "#ff4d4f" }}>{formatPercent(rate)}</Typography.Text>;
+        return <Typography.Text className={rate >= 0 ? styles.metricPositive : styles.metricNegative}>{formatPercent(rate)}</Typography.Text>;
       },
       sorter: (a, b) => {
         const aCost = toNumber(a.cost_value);
@@ -225,14 +224,14 @@ export default function HoldingsPage() {
       render: (_, row: Holding) => {
         const contribution = totalPnl === 0 ? 0 : (toNumber(row.unrealized_pnl) / totalPnl) * 100;
         return (
-          <Space direction="vertical" size={2} style={{ width: 136 }}>
+          <Stack gap="xs" className={styles.contribStack}>
             <Progress
               percent={Math.min(100, Math.abs(contribution))}
               showInfo={false}
               strokeColor={contribution >= 0 ? "#52c41a" : "#ff4d4f"}
             />
             <Typography.Text type="secondary">{formatPercent(contribution)}</Typography.Text>
-          </Space>
+          </Stack>
         );
       }
     }
@@ -249,7 +248,7 @@ export default function HoldingsPage() {
       render: (value: string) => {
         const numberValue = toNumber(value);
         return (
-          <Typography.Text style={{ color: Math.abs(numberValue) >= 5 ? "#d46b08" : "#1f4f94" }}>
+          <Typography.Text className={Math.abs(numberValue) >= 5 ? styles.metricWarning : styles.metricInfo}>
             {formatPercent(numberValue)}
           </Typography.Text>
         );
@@ -268,40 +267,40 @@ export default function HoldingsPage() {
       title: "状态",
       dataIndex: "is_alerted",
       width: 120,
-      render: (value: boolean) => (value ? <Tag color="error">超阈值</Tag> : <Tag color="success">正常</Tag>)
+      render: (value: boolean) => (value ? <StatusPill tone="negative">超阈值</StatusPill> : <StatusPill tone="positive">正常</StatusPill>)
     }
   ];
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack holdings-page">
+    <Stack className={`page-stack holdings-page ${styles.pageStack}`}>
       <div className="page-grid page-section holdings-kpi-grid">
-        <Card className="holdings-kpi-card">
+        <SurfaceCard className="holdings-kpi-card">
           <Typography.Text type="secondary">组合市值</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8 }}>
+          <Typography.Title level={3} className={styles.valueTitle}>
             {formatDecimal(totalMarketValue)}
           </Typography.Title>
-        </Card>
-        <Card className="holdings-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="holdings-kpi-card">
           <Typography.Text type="secondary">组合成本</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8 }}>
+          <Typography.Title level={3} className={styles.valueTitle}>
             {formatDecimal(totalCostValue)}
           </Typography.Title>
-        </Card>
-        <Card className="holdings-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="holdings-kpi-card">
           <Typography.Text type="secondary">浮盈亏</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8, color: totalPnl >= 0 ? "#1677ff" : "#ff4d4f" }}>
+          <Typography.Title level={3} className={`${styles.valueTitle} ${totalPnl >= 0 ? styles.metricPositive : styles.metricNegative}`}>
             {formatDecimal(totalPnl)}
           </Typography.Title>
-        </Card>
-        <Card className="holdings-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="holdings-kpi-card">
           <Typography.Text type="secondary">偏离提醒</Typography.Text>
-          <Typography.Title level={3} style={{ marginTop: 8 }}>
+          <Typography.Title level={3} className={styles.valueTitle}>
             {formatDecimal(driftAlertCount)}
           </Typography.Title>
-        </Card>
+        </SurfaceCard>
       </div>
 
-      <Card className="page-section holdings-exposure-card" title="核心敞口" extra={<Tag color="blue">按市值 Top 4</Tag>}>
+      <SurfaceCard className="page-section holdings-exposure-card" title="核心敞口" extra={<StatusPill tone="info">按市值 Top 4</StatusPill>}>
         <Row gutter={[12, 12]}>
           {topExposures.length === 0 && (
             <Col span={24}>
@@ -312,26 +311,26 @@ export default function HoldingsPage() {
             const share = totalMarketValue > 0 ? (toNumber(row.market_value) / totalMarketValue) * 100 : 0;
             return (
               <Col key={`${row.account_id}-${row.instrument_id}`} xs={24} sm={12} xl={6}>
-                <Card size="small" className="holdings-exposure-item">
+                <SurfaceCard size="small" className="holdings-exposure-item" tone="soft">
                   <Typography.Text type="secondary">
                     {row.symbol} · {accountNameMap.get(row.account_id) ?? row.account_id}
                   </Typography.Text>
-                  <Typography.Title level={5} style={{ marginTop: 8, marginBottom: 4, fontVariantNumeric: "tabular-nums" }}>
+                  <Typography.Title level={5} className={styles.exposureValue}>
                     {formatDecimal(row.market_value)}
                   </Typography.Title>
                   <Typography.Text type="secondary" ellipsis>
                     {row.instrument_name}
                   </Typography.Text>
-                  <Progress percent={Math.min(100, Number(share.toFixed(3)))} showInfo={false} style={{ marginTop: 8 }} />
+                  <Progress percent={Math.min(100, Number(share.toFixed(3)))} showInfo={false} className={styles.exposureProgress} />
                   <Typography.Text type="secondary">占组合 {formatPercent(share)}</Typography.Text>
-                </Card>
+                </SurfaceCard>
               </Col>
             );
           })}
         </Row>
-      </Card>
+      </SurfaceCard>
 
-      <Card
+      <SurfaceCard
         className="page-section holdings-detail-card"
         title="持仓明细"
         extra={
@@ -377,10 +376,10 @@ export default function HoldingsPage() {
           </div>
 
           <div className="holdings-filter-meta">
-            <Tag color="blue">结果 {filteredHoldings.length} 条</Tag>
-            <Tag color="geekblue">覆盖账户 {filteredAccountsCount} 个</Tag>
-            <Tag color="cyan">筛选市值 {formatDecimal(filteredMarketValue)}</Tag>
-            <Tag color={filteredPnl >= 0 ? "success" : "error"}>筛选浮盈亏 {formatDecimal(filteredPnl)}</Tag>
+            <StatusPill tone="info">结果 {filteredHoldings.length} 条</StatusPill>
+            <StatusPill tone="default">覆盖账户 {filteredAccountsCount} 个</StatusPill>
+            <StatusPill tone="info">筛选市值 {formatDecimal(filteredMarketValue)}</StatusPill>
+            <StatusPill tone={filteredPnl >= 0 ? "positive" : "negative"}>筛选浮盈亏 {formatDecimal(filteredPnl)}</StatusPill>
           </div>
         </div>
 
@@ -393,15 +392,15 @@ export default function HoldingsPage() {
           dataSource={filteredHoldings}
           columns={holdingColumns}
         />
-      </Card>
+      </SurfaceCard>
 
-      <Card
+      <SurfaceCard
         className="page-section holdings-drift-card"
         title="权重偏离"
         extra={
-          <Tag color={filteredDrifts.filter((item) => item.is_alerted).length > 0 ? "warning" : "success"}>
+          <StatusPill tone={filteredDrifts.filter((item) => item.is_alerted).length > 0 ? "warning" : "positive"}>
             当前超阈值 {filteredDrifts.filter((item) => item.is_alerted).length}
-          </Tag>
+          </StatusPill>
         }
       >
         <div className="holdings-filter-wrap">
@@ -444,7 +443,7 @@ export default function HoldingsPage() {
           dataSource={filteredDrifts}
           columns={driftColumns}
         />
-      </Card>
-    </Space>
+      </SurfaceCard>
+    </Stack>
   );
 }

@@ -1,9 +1,10 @@
-import { Card, Checkbox, Col, Row, Select, Space, Tag, Typography } from "antd";
+import { Checkbox, Col, Row, Select, Typography } from "antd";
 import type { EChartsOption } from "echarts";
 import ReactECharts from "echarts-for-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../api/client";
+import { Stack, StatusPill, SurfaceCard } from "../components/ui";
 import {
   Account,
   AccountTagSelection,
@@ -19,6 +20,7 @@ import {
 } from "../types";
 import { formatDecimal, formatPercent } from "../utils/format";
 import { showErrorModal } from "../utils/errorModal";
+import styles from "./DashboardPage.module.css";
 
 interface PieSlice {
   label: string;
@@ -786,63 +788,63 @@ export default function DashboardPage() {
 
   if (!summary) {
     return (
-      <Space direction="vertical" style={{ width: "100%" }} className="page-stack dashboard-page">
-        <Card loading={loading} />
-      </Space>
+      <Stack fullWidth className={`page-stack dashboard-page ${styles.pageStack}`}>
+        <SurfaceCard loading={loading} />
+      </Stack>
     );
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack dashboard-page">
+    <Stack fullWidth className={`page-stack dashboard-page ${styles.pageStack}`}>
       <div className="dashboard-kpi-grid page-section">
-        <Card className="dashboard-kpi-card">
+        <SurfaceCard className="dashboard-kpi-card">
           <Typography.Text type="secondary" className="kpi-label">总资产 ({summary.base_currency})</Typography.Text>
           <Typography.Title level={3} className="kpi-value">
             {formatDecimal(summary.total_assets)}
           </Typography.Title>
-        </Card>
-        <Card className="dashboard-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="dashboard-kpi-card">
           <Typography.Text type="secondary" className="kpi-label">净资金投入</Typography.Text>
           <Typography.Title level={3} className="kpi-value">
             {formatDecimal(derived.netContribution)}
           </Typography.Title>
-        </Card>
-        <Card className="dashboard-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="dashboard-kpi-card">
           <Typography.Text type="secondary" className="kpi-label">累计收益</Typography.Text>
-          <Typography.Title level={3} className="kpi-value" style={{ color: derived.totalReturn >= 0 ? "#1f4f94" : "#d9363e" }}>
+          <Typography.Title level={3} className={`kpi-value ${derived.totalReturn >= 0 ? styles.metricPositive : styles.metricNegative}`}>
             {formatDecimal(derived.totalReturn)}
           </Typography.Title>
-        </Card>
-        <Card className="dashboard-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="dashboard-kpi-card">
           <Typography.Text type="secondary" className="kpi-label">累计收益率</Typography.Text>
-          <Typography.Title level={3} className="kpi-value" style={{ color: (derived.totalReturnRate ?? 0) >= 0 ? "#1f4f94" : "#d9363e" }}>
+          <Typography.Title level={3} className={`kpi-value ${(derived.totalReturnRate ?? 0) >= 0 ? styles.metricPositive : styles.metricNegative}`}>
             {derived.totalReturnRate === null ? "-" : formatPercent(derived.totalReturnRate)}
           </Typography.Title>
-        </Card>
-        <Card className="dashboard-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="dashboard-kpi-card">
           <Typography.Text type="secondary" className="kpi-label">未实现盈亏</Typography.Text>
-          <Typography.Title level={3} className="kpi-value" style={{ color: derived.totalPnl >= 0 ? "#1f4f94" : "#d9363e" }}>
+          <Typography.Title level={3} className={`kpi-value ${derived.totalPnl >= 0 ? styles.metricPositive : styles.metricNegative}`}>
             {formatDecimal(derived.totalPnl)}
           </Typography.Title>
-        </Card>
-        <Card className="dashboard-kpi-card">
+        </SurfaceCard>
+        <SurfaceCard className="dashboard-kpi-card">
           <Typography.Text type="secondary" className="kpi-label">浮动收益率</Typography.Text>
-          <Typography.Title level={3} className="kpi-value" style={{ color: (derived.floatingPnlRate ?? 0) >= 0 ? "#1f4f94" : "#d9363e" }}>
+          <Typography.Title level={3} className={`kpi-value ${(derived.floatingPnlRate ?? 0) >= 0 ? styles.metricPositive : styles.metricNegative}`}>
             {derived.floatingPnlRate === null ? "-" : formatPercent(derived.floatingPnlRate)}
           </Typography.Title>
-        </Card>
+        </SurfaceCard>
       </div>
 
       <Row gutter={[16, 16]} className="page-section dashboard-hero-row">
         <Col xs={24} xl={16}>
-          <Card
+          <SurfaceCard
             title="收益率曲线"
             className="dashboard-curve-card"
             extra={
               <Select
                 size="small"
                 value={curveDays}
-                style={{ width: 140 }}
+                className={styles.selectCurve}
                 onChange={(value: number) => setCurveDays(value)}
                 options={[
                   { value: 30, label: "近 30 天" },
@@ -860,68 +862,72 @@ export default function DashboardPage() {
             ) : (
               <Typography.Text type="secondary">数据不足，暂无法绘制收益率曲线。</Typography.Text>
             )}
-          </Card>
+          </SurfaceCard>
         </Col>
 
         <Col xs={24} xl={8}>
-          <Card title="收益快照" className="dashboard-snapshot-card">
-            <Space direction="vertical" style={{ width: "100%" }} size={10}>
+          <SurfaceCard title="收益快照" className="dashboard-snapshot-card">
+            <Stack gap="md" className={styles.snapshotStack}>
               <div className="snapshot-row">
                 <Typography.Text type="secondary">当前收益率</Typography.Text>
-                <Tag color={(derived.latestRate ?? 0) >= 0 ? "success" : "error"}>{derived.latestRate === null ? "-" : formatPercent(derived.latestRate)}</Tag>
+                <StatusPill tone={(derived.latestRate ?? 0) >= 0 ? "positive" : "negative"}>
+                  {derived.latestRate === null ? "-" : formatPercent(derived.latestRate)}
+                </StatusPill>
               </div>
               <div className="snapshot-row">
                 <Typography.Text type="secondary">区间峰值</Typography.Text>
-                <Tag color="processing">{derived.peakRate === null ? "-" : formatPercent(derived.peakRate)}</Tag>
+                <StatusPill tone="info">{derived.peakRate === null ? "-" : formatPercent(derived.peakRate)}</StatusPill>
               </div>
               <div className="snapshot-row">
                 <Typography.Text type="secondary">最大回撤</Typography.Text>
-                <Tag color={(derived.maxDrawdown ?? 0) < 0 ? "warning" : "success"}>{derived.maxDrawdown === null ? "-" : formatPercent(derived.maxDrawdown)}</Tag>
+                <StatusPill tone={(derived.maxDrawdown ?? 0) < 0 ? "warning" : "positive"}>
+                  {derived.maxDrawdown === null ? "-" : formatPercent(derived.maxDrawdown)}
+                </StatusPill>
               </div>
               <div className="snapshot-row">
                 <Typography.Text type="secondary">超阈值偏离</Typography.Text>
-                <Tag color={derived.alertedCount > 0 ? "error" : "success"}>{formatDecimal(derived.alertedCount)}</Tag>
+                <StatusPill tone={derived.alertedCount > 0 ? "negative" : "positive"}>{formatDecimal(derived.alertedCount)}</StatusPill>
               </div>
 
               <div>
                 <Typography.Text type="secondary">盈利 Top 3</Typography.Text>
-                <Space direction="vertical" size={6} style={{ width: "100%", marginTop: 6 }}>
+                <Stack gap="sm" className={styles.snapshotList}>
                   {derived.gainers.length === 0 && <Typography.Text type="secondary">暂无盈利持仓</Typography.Text>}
                   {derived.gainers.map((row) => (
                     <div key={`${row.account_id}-${row.instrument_id}`} className="snapshot-row">
                       <Typography.Text>{row.symbol}</Typography.Text>
-                      <Tag color="success">{formatDecimal(row.unrealized_pnl)}</Tag>
+                      <StatusPill tone="positive">{formatDecimal(row.unrealized_pnl)}</StatusPill>
                     </div>
                   ))}
-                </Space>
+                </Stack>
               </div>
 
               <div>
                 <Typography.Text type="secondary">亏损 Top 3</Typography.Text>
-                <Space direction="vertical" size={6} style={{ width: "100%", marginTop: 6 }}>
+                <Stack gap="sm" className={styles.snapshotList}>
                   {derived.losers.length === 0 && <Typography.Text type="secondary">暂无亏损持仓</Typography.Text>}
                   {derived.losers.map((row) => (
                     <div key={`${row.account_id}-${row.instrument_id}`} className="snapshot-row">
                       <Typography.Text>{row.symbol}</Typography.Text>
-                      <Tag color="error">{formatDecimal(row.unrealized_pnl)}</Tag>
+                      <StatusPill tone="negative">{formatDecimal(row.unrealized_pnl)}</StatusPill>
                     </div>
                   ))}
-                </Space>
+                </Stack>
               </div>
-            </Space>
-          </Card>
+            </Stack>
+          </SurfaceCard>
         </Col>
       </Row>
 
       <Row gutter={[16, 16]} className="page-section dashboard-chart-row">
         <Col xs={24} md={12} xl={8}>
-          <Card
+          <SurfaceCard
             title="资产结构"
             className="dashboard-pie-card dashboard-asset-card"
             extra={
               <Select
                 size="small"
-                style={{ width: 180 }}
+                className={styles.selectAsset}
                 value={activeAssetNodeId ?? "ROOT"}
                 options={assetNodeOptions}
                 onChange={(value) => setActiveAssetNodeId(value === "ROOT" ? null : Number(value))}
@@ -933,7 +939,7 @@ export default function DashboardPage() {
             ) : (
               <div className="chart-empty">暂无可展示数据</div>
             )}
-            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+            <Stack gap="sm" className={styles.legendContainer}>
               {assetStructure.slices.map((slice) => (
                 <div key={slice.label} className="donut-legend-item">
                   <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
@@ -941,18 +947,18 @@ export default function DashboardPage() {
                   <Typography.Text className="metric-value">{formatPercent(slice.value)}</Typography.Text>
                 </div>
               ))}
-            </Space>
-          </Card>
+            </Stack>
+          </SurfaceCard>
         </Col>
 
         <Col xs={24} md={12} xl={8}>
-          <Card
+          <SurfaceCard
             title="标签持仓占比"
             className="dashboard-pie-card dashboard-tag-card"
             extra={
               <Select
                 size="small"
-                style={{ width: 160 }}
+                className={styles.selectTag}
                 value={activeTagGroupId ?? undefined}
                 placeholder="选择标签组"
                 options={tagGroups.map((item) => ({ value: item.id, label: item.name }))}
@@ -971,7 +977,7 @@ export default function DashboardPage() {
             <Checkbox checked={showUntaggedInTagPie} onChange={(event) => setShowUntaggedInTagPie(event.target.checked)} disabled={tagGroups.length === 0}>
               显示未标记资产
             </Checkbox>
-            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+            <Stack gap="sm" className={styles.legendContainer}>
               {derived.activeTagGroupName && (
                 <Typography.Text type="secondary">当前标签组：{derived.activeTagGroupName}</Typography.Text>
               )}
@@ -982,20 +988,20 @@ export default function DashboardPage() {
                   <Typography.Text className="metric-value">{formatPercent(slice.value)}</Typography.Text>
                 </div>
               ))}
-            </Space>
-          </Card>
+            </Stack>
+          </SurfaceCard>
         </Col>
 
         <Col xs={24} md={24} xl={8}>
-          <Card title="偏离强度" className="dashboard-drift-card">
+          <SurfaceCard title="偏离强度" className="dashboard-drift-card">
             {driftChartOption ? (
               <ReactECharts option={driftChartOption} notMerge lazyUpdate className="dashboard-echart dashboard-echart-drift" />
             ) : (
               <Typography.Text type="secondary">暂无偏离数据</Typography.Text>
             )}
-          </Card>
+          </SurfaceCard>
         </Col>
       </Row>
-    </Space>
+    </Stack>
   );
 }

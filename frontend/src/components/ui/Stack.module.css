@@ -1,0 +1,25 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.gapXs {
+  gap: var(--space-1);
+}
+
+.gapSm {
+  gap: var(--space-2);
+}
+
+.gapMd {
+  gap: var(--space-3);
+}
+
+.gapLg {
+  gap: var(--space-4);
+}

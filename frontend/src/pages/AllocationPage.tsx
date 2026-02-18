@@ -640,7 +640,7 @@ export default function AllocationPage() {
                       <Typography.Text type="secondary" className="tree-instrument-name">
                         {instrument.name}
                       </Typography.Text>
-                      <Tag color="geekblue" style={{ marginInlineEnd: 0 }}>
+                      <Tag color="geekblue">
                         标的
                       </Tag>
                     </div>
@@ -665,7 +665,7 @@ export default function AllocationPage() {
                 <Typography.Text type="secondary" className="tree-instrument-name">
                   {account.type}
                 </Typography.Text>
-                <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                <Tag color="orange">
                   账户现金
                 </Tag>
               </div>
@@ -833,7 +833,7 @@ export default function AllocationPage() {
   }, [selectedNode]);
 
   return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }} className="page-stack allocation-page">
+    <Space direction="vertical" size={16} className="page-stack allocation-page allocation-full-width">
       <Row gutter={[16, 16]} className="page-section dashboard-chart-row allocation-chart-row">
         <Col xs={24} md={12} xl={8}>
           <Card title="目标资产结构（根节点）" className="dashboard-pie-card">
@@ -842,7 +842,7 @@ export default function AllocationPage() {
             ) : (
               <div className="chart-empty">暂无可展示数据</div>
             )}
-            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+            <Space direction="vertical" className="allocation-full-width" size={8}>
               {targetRootSlices.map((slice) => (
                 <div key={slice.label} className="donut-legend-item">
                   <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
@@ -861,7 +861,7 @@ export default function AllocationPage() {
             ) : (
               <div className="chart-empty">暂无可展示数据</div>
             )}
-            <Space direction="vertical" style={{ width: "100%" }} size={8}>
+            <Space direction="vertical" className="allocation-full-width" size={8}>
               {targetLeafSlices.map((slice) => (
                 <div key={slice.label} className="donut-legend-item">
                   <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
@@ -883,7 +883,7 @@ export default function AllocationPage() {
               <div className="chart-empty">{selectedNodeCanBindInstruments ? "当前节点暂无持仓标的" : "暂无可展示数据"}</div>
             )}
             {selectedNode && selectedNodeSlices.length > 0 && (
-              <Space direction="vertical" style={{ width: "100%" }} size={8}>
+              <Space direction="vertical" className="allocation-full-width" size={8}>
                 {selectedNodeSlices.map((slice) => (
                   <div key={slice.label} className="donut-legend-item">
                     <span className="donut-legend-dot" style={{ backgroundColor: slice.color }} />
@@ -907,7 +907,7 @@ export default function AllocationPage() {
         <div className="allocation-workbench">
           <div className="allocation-panel">
             <div className="allocation-panel-head">
-              <Typography.Title level={5} style={{ margin: 0 }}>
+              <Typography.Title level={5} className="allocation-title-tight">
                 资产层级
               </Typography.Title>
             </div>
@@ -935,7 +935,7 @@ export default function AllocationPage() {
 
           <div className="allocation-panel allocation-editor-panel">
             <div className="allocation-panel-head">
-              <Typography.Title level={5} style={{ margin: 0 }}>
+              <Typography.Title level={5} className="allocation-title-tight">
                 节点编辑
               </Typography.Title>
               {selectedNode ? (
@@ -959,7 +959,7 @@ export default function AllocationPage() {
                 </div>
 
                 <div className="allocation-editor-group">
-                  <Typography.Title level={5} style={{ margin: 0 }}>
+                  <Typography.Title level={5} className="allocation-title-tight">
                     节点基础信息
                   </Typography.Title>
                   <Form<NodeRenameForm> layout="vertical" form={nodeRenameForm} onFinish={(values) => void renameSelectedNode(values)} className="allocation-rename-form">
@@ -986,17 +986,16 @@ export default function AllocationPage() {
 
                 {selectedNodeCanBindInstruments && (
                   <div className="allocation-editor-group">
-                    <Typography.Title level={5} style={{ margin: 0 }}>
+                    <Typography.Title level={5} className="allocation-title-tight">
                       持仓标的配置
                     </Typography.Title>
                     <Typography.Text type="secondary">
                       当前节点无子节点，可将已有标的（含自定义标的）归入该节点，用于“当前层级资产结构”展示标的占比。
                     </Typography.Text>
-                    <Space.Compact className="allocation-instrument-bind" style={{ width: "100%" }}>
+                    <Space.Compact className="allocation-instrument-bind">
                       <Select
                         value={leafInstrumentDraftId}
                         placeholder="选择标的"
-                        style={{ flex: 1 }}
                         showSearch
                         allowClear
                         optionFilterProp="label"
@@ -1055,17 +1054,16 @@ export default function AllocationPage() {
                 )}
 
                 <div className="allocation-editor-group">
-                  <Typography.Title level={5} style={{ margin: 0 }}>
+                  <Typography.Title level={5} className="allocation-title-tight">
                     账户现金归属配置
                   </Typography.Title>
                   <Typography.Text type="secondary">
                     可将账户现金归入当前层级，用于仪表盘“资产结构”按你配置的层级展示现金归属。
                   </Typography.Text>
-                  <Space.Compact className="allocation-instrument-bind" style={{ width: "100%" }}>
+                  <Space.Compact className="allocation-instrument-bind">
                     <Select
                       value={nodeAccountDraftId}
                       placeholder="选择账户"
-                      style={{ flex: 1 }}
                       showSearch
                       allowClear
                       optionFilterProp="label"
@@ -1172,7 +1170,7 @@ export default function AllocationPage() {
             )}
 
             <div className="allocation-editor-group allocation-editor-group-create">
-              <Typography.Title level={5} style={{ margin: 0 }}>
+              <Typography.Title level={5} className="allocation-title-tight">
                 新增节点
               </Typography.Title>
               <Typography.Text type="secondary">
@@ -1199,7 +1197,7 @@ export default function AllocationPage() {
                   <Input placeholder="例如：权益类" />
                 </Form.Item>
                 <Form.Item label="目标权重（%）" name="target_weight" rules={[{ required: true, message: "请输入目标权重" }]}>
-                  <InputNumber min={0} max={100} precision={3} style={{ width: "100%" }} />
+                  <InputNumber min={0} max={100} precision={3} className="allocation-input-full" />
                 </Form.Item>
                 <Button type="primary" htmlType="submit" loading={loading}>
                   创建节点

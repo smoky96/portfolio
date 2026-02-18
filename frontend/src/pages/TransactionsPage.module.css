@@ -1,0 +1,43 @@
+.pageStack {
+  width: 100%;
+}
+
+.valueTitle {
+  margin-top: 8px !important;
+}
+
+.metricPositive {
+  color: var(--success) !important;
+}
+
+.metricNegative {
+  color: var(--danger) !important;
+}
+
+.inputNumberFull {
+  width: 100%;
+}
+
+.actionRow {
+  margin-top: 12px;
+}
+
+.toolbarKeyword {
+  max-width: 280px;
+}
+
+.toolbarType {
+  width: 180px;
+}
+
+.toolbarAccount {
+  width: 180px;
+}
+
+.toolbarInstrument {
+  width: 220px;
+}
+
+.toolbarCurrency {
+  width: 140px;
+}

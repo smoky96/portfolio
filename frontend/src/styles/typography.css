@@ -1,0 +1,36 @@
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap");
+
+body {
+  font-family: var(--font-body);
+  color: var(--text-main);
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.ant-typography {
+  color: var(--text-main);
+}
+
+.metric-value,
+.kpi-value,
+.tabular-number {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-positive {
+  color: var(--success) !important;
+}
+
+.text-negative {
+  color: var(--danger) !important;
+}
+
+.text-warning {
+  color: var(--warning) !important;
+}
